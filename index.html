@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ro">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <!-- viewport-fit=cover is what lets the page paint under the Dynamic Island and
@@ -19,11 +19,11 @@
 
 <!-- sw.js reads this exact string out of the response body before it will let
      anything replace the cached app shell. A captive wifi portal answers every
-     request with 200 and text/html, which is indistinguishable from this page
-     by headers alone - but it will not carry this marker. Do not remove. -->
+     request with 200 and text/html, which is indistinguishable from this page by
+     headers alone - but it will not carry this marker. Do not remove. -->
 <meta name="app-id" content="elfeth-prayer-times">
 
-<title>Namaz — El-Feth</title>
+<title>Namaz</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <!-- iOS ignores the manifest icons for "Add to Home Screen"; this link is the one it reads. -->
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
@@ -31,31 +31,25 @@
 
 <style>
 /* ---------------------------------------------------------------------------
-   "Midnight glass": near-black ink, one accent, hairlines, type doing the work.
-   Everything is a token so the whole mood can be retuned from twelve lines.
+   Near-black ink, one accent, hairlines, and type doing all of the work.
+   There is nothing on this screen that is not a time or the name of a prayer.
    --------------------------------------------------------------------------- */
 :root{
   --ink:       #05070C;   /* page floor - almost black, very slightly blue */
   --ink-2:     #0A0F1A;   /* the bottom of the page gradient */
   --accent:    #8AAEFF;   /* the single accent. Nothing else is coloured. */
-  --accent-85: rgba(138,174,255,.85);
-  --accent-56: rgba(138,174,255,.56);
   --accent-30: rgba(138,174,255,.30);
   --accent-14: rgba(138,174,255,.14);
   --glow:      rgba(126,160,255,.16);
 
-  /* Four steps of quiet, floored where they are. Anything dimmer than --text-4
-     was unreadable at full brightness outdoors, which is where he uses it. */
   --text:      #F2F5FA;
   --text-2:    rgba(238,243,252,.66);
   --text-3:    rgba(238,243,252,.46);
   --text-4:    rgba(238,243,252,.30);
 
-  --line:      rgba(255,255,255,.075);  /* hairline separators */
+  --line:      rgba(255,255,255,.075);
   --glass:     rgba(255,255,255,.042);
   --glass-line:rgba(255,255,255,.085);
-
-  --pad: 22px;
 }
 
 *{ box-sizing:border-box; margin:0; padding:0; }
@@ -74,114 +68,88 @@ body{
   font-family:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-synthesis:none;
   -webkit-font-smoothing:antialiased;
-  overscroll-behavior:none;         /* no bounce past the top revealing a wrong colour */
+  overscroll-behavior:none;
   -webkit-tap-highlight-color:transparent;
   -webkit-touch-callout:none;
   user-select:none; -webkit-user-select:none;
   /* Kills double-tap-to-zoom. An installed standalone window has no address bar
-     and no reload button, so a stray double tap that zooms the page is a state
-     he cannot get out of without force-quitting the app. */
+     and no reload button, so a stray double tap that zooms is a state he cannot
+     get out of without force-quitting the app. */
   touch-action:manipulation;
-  min-height:100vh;                 /* old iOS */
-  min-height:100dvh;                /* 15.4+ : survives the URL bar sliding away */
+  min-height:100vh;
+  min-height:100dvh;
 }
 
 /* The aura lives on a fixed layer rather than on body's background, because iOS
-   Safari does not honour background-attachment:fixed - it silently sizes the
-   gradient to the whole document, which puts the pool of light in the wrong
-   place the moment the page is tall enough to scroll.
-   One very soft pool of accent behind the countdown, a cool floor light at the
-   bottom, and a slow ink gradient. That is the entire depth budget. */
+   Safari does not honour background-attachment:fixed - it sizes the gradient to
+   the whole document, which puts the pool of light in the wrong place the moment
+   the page is tall enough to scroll. One soft pool of accent behind the
+   countdown, a cool floor light at the bottom, a slow ink gradient. That is the
+   entire depth budget. */
 .sky{
   position:fixed; left:0; right:0; top:0; bottom:0; z-index:-1;
   pointer-events:none;
   background:
-    radial-gradient(125% 46% at 50% 4%,   var(--glow) 0%, rgba(126,160,255,0) 62%),
+    radial-gradient(125% 46% at 50% 6%,   var(--glow) 0%, rgba(126,160,255,0) 62%),
     radial-gradient(90% 38% at 50% 100%,  rgba(138,174,255,.05) 0%, rgba(138,174,255,0) 70%),
     linear-gradient(180deg, var(--ink) 0%, var(--ink-2) 100%);
-  animation:breathe 14s ease-in-out infinite;
 }
 
-/* Every clock, countdown and interval on screen. Both properties, because older
-   iOS honours font-feature-settings and newer ones honour font-variant-numeric. */
+/* Every clock and countdown on screen. Both properties, because older iOS
+   honours font-feature-settings and newer ones font-variant-numeric. */
 .num{ font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1; }
 
 .app{
   max-width:560px; margin:0 auto;
   /* The four insets. In a Safari tab they are 0 and the fallbacks do the work. */
-  padding:calc(env(safe-area-inset-top, 0px)  + 16px) calc(env(safe-area-inset-right, 0px) + var(--pad))
-          calc(env(safe-area-inset-bottom,0px) + 26px) calc(env(safe-area-inset-left,  0px) + var(--pad));
+  padding:calc(env(safe-area-inset-top, 0px)  + 18px) calc(env(safe-area-inset-right, 0px) + 24px)
+          calc(env(safe-area-inset-bottom,0px) + 26px) calc(env(safe-area-inset-left,  0px) + 24px);
   min-height:100vh;
   min-height:100dvh;
   display:flex; flex-direction:column;
 }
 
-/* ---------------------------------------------- header: place, date, clock -- */
-.head{
-  display:flex; align-items:baseline; justify-content:space-between; gap:14px;
-  padding-bottom:16px;
-}
-.head .who{ min-width:0; }
-.place{
-  font-size:12.5px; font-weight:600; letter-spacing:.02em; color:var(--text-2);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.place b{ font-weight:600; color:var(--text); }
-.date{ font-size:12.5px; color:var(--text-3); margin-top:3px; }
-.clock{
-  font-size:15px; font-weight:500; color:var(--text-2); letter-spacing:.01em;
-  flex:none;
-}
-
 /* ------------------------------------------------------------------- hero -- */
 .hero{
-  padding:20px 0 21px;
-  padding:clamp(12px, 2.2vh, 30px) 0 clamp(12px, 2.0vh, 28px);
-  padding:clamp(12px, 2.2svh, 30px) 0 clamp(12px, 2.0svh, 28px);
-  text-align:center; position:relative;
+  text-align:center;
+  padding:clamp(20px, 4.2vh, 56px) 0 clamp(20px, 3.8vh, 48px);
+  padding:clamp(20px, 4.2svh, 56px) 0 clamp(20px, 3.8svh, 48px);
 }
 .eyebrow{
-  font-size:10.5px; font-weight:650; letter-spacing:.17em; text-transform:uppercase;
+  font-size:10.5px; font-weight:650; letter-spacing:.19em; text-transform:uppercase;
   color:var(--text-3);
 }
-.hero .eyebrow{ color:var(--accent-85); }
+.hero .eyebrow{ color:var(--accent); opacity:.85; }
 .next-name{
-  margin-top:7px; font-size:22px; font-weight:600; letter-spacing:-.01em; color:var(--text);
+  margin-top:10px; font-size:clamp(21px,6vw,26px); font-weight:600;
+  letter-spacing:-.01em; color:var(--text);
 }
-.next-name span{ font-weight:400; color:var(--text-3); }
 .count{
-  margin-top:1px;
-  /* 14vw, not 16.5: measured, the larger figure cost 12px of height that the
-     day needed more than the number did. It is still the biggest thing on the
-     screen by a factor of three. */
-  font-size:clamp(44px, 14vw, 70px);
-  line-height:1.06;
+  margin-top:2px;
+  font-size:clamp(50px, 16vw, 84px);
+  line-height:1.05;
   font-weight:300;                 /* SF Pro Light: the iOS Weather temperature look */
   letter-spacing:-.035em;
   color:var(--text);
-  text-shadow:0 0 42px rgba(138,174,255,.18);   /* glass catching light, not neon */
+  text-shadow:0 0 44px rgba(138,174,255,.18);   /* glass catching light, not neon */
 }
-.at{ margin-top:5px; font-size:13.5px; color:var(--text-2); letter-spacing:.005em; }
+.at{ margin-top:7px; font-size:14px; color:var(--text-2); }
 
 /* ------------------------------------------------- the window open right now */
 .card{
-  position:relative;
   border:1px solid var(--glass-line);
   border-radius:20px;
   background:var(--glass);
   -webkit-backdrop-filter:blur(22px) saturate(140%);
   backdrop-filter:blur(22px) saturate(140%);
-  padding:13px 15px 14px;
-  /* a hairline of light on the top edge - how iOS fakes a pane of glass */
+  padding:15px 17px 16px;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.055), 0 14px 40px rgba(0,0,0,.35);
 }
 .card-top{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
-.card-left{ min-width:0; }
-.open-name{ margin-top:9px; font-size:19px; font-weight:600; letter-spacing:-.01em; }
-.open-name span{ font-weight:400; color:var(--text-3); }
+.open-name{ margin-top:8px; font-size:20px; font-weight:600; letter-spacing:-.01em; }
 .remain{ font-size:12.5px; color:var(--text-2); flex:none; white-space:nowrap; }
 
-.bar{ margin-top:12px; display:flex; align-items:center; gap:10px; }
+.bar{ margin-top:14px; display:flex; align-items:center; gap:10px; }
 .bar-end{ font-size:12px; color:var(--text-3); flex:none; }
 .track{
   position:relative; flex:1 1 auto; height:3px; border-radius:2px;
@@ -196,58 +164,30 @@ body{
   border-radius:50%; background:#fff;
   box-shadow:0 0 0 3px rgba(138,174,255,.18), 0 0 14px 2px rgba(138,174,255,.55);
 }
-/* the sunrise -> Dhuhr stretch: nothing is open, and the bar says so by going
-   dashed instead of solid. Same geometry, so the head dot stays put. */
+/* Sunrise to Dhuhr: nothing is open, and the bar says so by going dashed rather
+   than solid. Same geometry, so the head dot stays exactly where it was. */
 .card.gap .track{
   background:repeating-linear-gradient(90deg,
     rgba(255,255,255,.14) 0 3px, rgba(255,255,255,0) 3px 7px);
 }
 .card.gap .fill{
   background:repeating-linear-gradient(90deg,
-    var(--accent-56) 0 3px, rgba(138,174,255,0) 3px 7px);
+    rgba(138,174,255,.56) 0 3px, rgba(138,174,255,0) 3px 7px);
 }
 .card.gap .head-dot{ background:var(--accent); box-shadow:0 0 12px 1px rgba(138,174,255,.45); }
 .card.gap .open-name{ color:var(--text-2); font-weight:500; }
 
-.tah-note{
-  margin-top:7px; padding-top:7px; border-top:1px solid var(--line);
-  font-size:12.5px; color:var(--text-2);
-}
-.tah-note b{ color:var(--accent); font-weight:600; }
-
-/* ------------------------------------------------------- the 24-hour rail -- */
-.rail-wrap{ margin-top:22px; margin-top:clamp(14px, 1.9vh, 26px); margin-top:clamp(14px, 1.9svh, 26px); }
-.rail{ position:relative; height:9px; }
-.segs{
-  position:absolute; left:0; right:0; top:0; bottom:0;
-  border-radius:5px; background:rgba(255,255,255,.055); overflow:hidden;
-}
-.seg{ position:absolute; top:0; height:100%; background:var(--accent); border-radius:2px; }
-.seg.on{ box-shadow:0 0 16px 1px rgba(138,174,255,.5); }
-.tah-strip{ position:relative; height:2px; margin-bottom:5px; }
-.tah-strip i{ position:absolute; top:0; height:0; border-top:2px dotted var(--accent-56); }
-.now-mark{
-  position:absolute; top:-5px; width:1.5px; height:19px; margin-left:-.75px;
-  background:#fff; border-radius:1px;
-  box-shadow:0 0 10px 2px rgba(255,255,255,.35);
-}
-.ticks{ position:relative; height:14px; margin-top:7px; }
-.ticks i{ position:absolute; top:0; width:1px; height:3px; background:var(--text-4); }
-.ticks b{
-  position:absolute; top:5px; font-size:9.5px; font-weight:500; color:var(--text-4);
-  transform:translateX(-50%); letter-spacing:.04em;
-}
-
 /* ------------------------------------------------------------------ list -- */
-/* One line per prayer, the way an iOS list does it. Two lines was prettier and
-   pushed Isha off the bottom of a 6.1" screen, which is the wrong trade for the
-   one screen he actually looks at. */
-.list{ margin-top:12px; margin-top:clamp(9px, 1.4vh, 16px); margin-top:clamp(9px, 1.4svh, 16px); list-style:none; }
+.list{
+  flex:1 1 auto; list-style:none;
+  margin-top:clamp(16px, 3vh, 34px);
+  margin-top:clamp(16px, 3svh, 34px);
+  display:flex; flex-direction:column; justify-content:center;
+}
 .row{
   position:relative; display:flex; align-items:center; gap:13px;
-  padding:11px 2px 11px 0;
-  padding:clamp(8px, 1.15vh, 14px) 2px clamp(8px, 1.15vh, 14px) 0;
-  padding:clamp(8px, 1.15svh, 14px) 2px clamp(8px, 1.15svh, 14px) 0;
+  padding:clamp(11px, 1.9vh, 18px) 2px clamp(11px, 1.9vh, 18px) 0;
+  padding:clamp(11px, 1.9svh, 18px) 2px clamp(11px, 1.9svh, 18px) 0;
   border-top:1px solid var(--line);
 }
 .row.first{ border-top:none; }
@@ -255,16 +195,14 @@ body{
   flex:none; width:7px; height:7px; border-radius:50%;
   background:transparent; box-shadow:inset 0 0 0 1px var(--text-4);
 }
-.row.next .dot{ box-shadow:inset 0 0 0 1.5px var(--accent-56); }
+.row.next .dot{ box-shadow:inset 0 0 0 1.5px rgba(138,174,255,.56); }
 .row.on   .dot{ background:var(--accent); box-shadow:0 0 12px 2px rgba(138,174,255,.55); }
 .row.past .dot{ box-shadow:inset 0 0 0 1px rgba(238,243,252,.13); }
-.r-name{ flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.r-ar{ font-size:17px; font-weight:600; letter-spacing:-.01em; color:var(--text); }
-.r-tr{ font-size:12.5px; color:var(--text-3); letter-spacing:.01em; margin-left:8px; }
-.r-int{ flex:none; font-size:15px; color:var(--text-2); letter-spacing:.005em; }
+.r-name{ flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+         font-size:18px; font-weight:600; letter-spacing:-.01em; }
+.r-int{ flex:none; font-size:16px; color:var(--text-2); }
 
-.row.past .r-ar{ color:var(--text-3); font-weight:500; }
-.row.past .r-tr{ color:var(--text-4); }
+.row.past .r-name{ color:var(--text-3); font-weight:500; }
 .row.past .r-int{ color:var(--text-4); }
 .row.on .r-int{ color:var(--accent); font-weight:500; }
 .row.on{
@@ -272,100 +210,52 @@ body{
   background:linear-gradient(90deg, var(--accent-14) 0%, rgba(138,174,255,0) 58%);
   box-shadow:inset 2px 0 0 var(--accent);
   border-radius:0 12px 12px 0;
-  margin-left:-10px; padding-left:10px; width:calc(100% + 10px);
+  margin-left:-12px; padding-left:12px; width:calc(100% + 12px);
 }
-.row.next .r-ar{ color:var(--text); }
-.row.next .r-int{ color:var(--text); }
+.row.next .r-name, .row.next .r-int{ color:var(--text); }
 
-/* Tahajjud: voluntary, overlapping, and it must never be mistaken for one of the
-   five. It is inset behind a dashed rule and never takes the solid accent fill. */
+/* Tahajjud is voluntary and overlaps Isha, so it must never be mistaken for one
+   of the five. It sits inset behind a dashed rule and never takes the solid
+   accent fill, which is the whole distinction - no badge needed. */
 .row.vol{ padding-left:14px; }
-.row.vol .r-ar{ font-size:15.5px; font-weight:500; color:var(--text-2); }
+.row.vol .r-name{ font-size:16.5px; font-weight:500; color:var(--text-2); }
 .row.vol .rule{
-  position:absolute; left:3px; top:8px; bottom:8px; width:0;
+  position:absolute; left:3px; top:9px; bottom:9px; width:0;
   border-left:1px dashed var(--accent-30);
 }
 .row.vol.on{ background:none; box-shadow:none; margin-left:0; padding-left:14px; width:auto; }
-.row.vol.on .r-ar{ color:var(--text); }
+.row.vol.on .r-name{ color:var(--text); }
 .row.vol.on .rule{ border-left:1px dashed var(--accent); }
-.row.vol.on .r-int{ color:var(--accent-56); }
-.tag{
-  display:inline-block; margin-left:7px; font-size:9.5px; font-weight:600;
-  letter-spacing:.12em; text-transform:uppercase; color:var(--text-4);
-  vertical-align:.12em;
+.row.vol.on .r-int{ color:rgba(138,174,255,.56); }
+
+/* In the small hours the Isha row shows LAST NIGHT'S window - the one actually
+   open - so it has to say so, or it reads as contradicting the Maghrib row
+   above it, every night of the year. */
+.eve{
+  margin-left:8px; font-size:11px; font-weight:500; color:var(--text-4);
+  letter-spacing:.02em;
 }
 
-/* sunrise: a boundary, not a prayer - so it is a hairline with a word on it */
-.sun{
-  display:flex; align-items:center; gap:10px;
-  padding:8px 2px 8px 0;
-  padding:clamp(5px, 0.75vh, 10px) 2px clamp(5px, 0.75vh, 10px) 0;
-  padding:clamp(5px, 0.75svh, 10px) 2px clamp(5px, 0.75svh, 10px) 0;
-  border-top:1px solid var(--line);
-  font-size:11.5px; color:var(--text-3);
-}
-.sun .mk{ flex:none; width:7px; text-align:center; color:var(--text-4); font-size:10px; }
-.sun .sp{ flex:1 1 auto; height:0; border-top:1px dashed rgba(255,255,255,.07); }
-
-/* Shown only once Isha has begun, when nothing in today's list is still ahead. */
-.tomorrow{
-  margin-top:15px; display:flex; justify-content:space-between; gap:12px;
-  font-size:12px; color:var(--text-3);
-}
-.tomorrow b{ color:var(--text-2); font-weight:600; }
-/* ------------------------------------------------------------- states ------ */
 .hide{ display:none !important; }
-.msg{ padding:44px 0; text-align:center; color:var(--text-2); font-size:14px; line-height:1.65; }
+.msg{ padding:48px 0; text-align:center; color:var(--text-2); font-size:14px; line-height:1.65; }
 
-/* One entrance, once. After that only the digits change and the aura breathes -
-   nothing that carries information ever moves. */
+/* One entrance, once. After that only the digits change - nothing that carries
+   information ever moves. */
 @keyframes rise{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:none; } }
-@keyframes breathe{ 0%,100%{ opacity:.82; } 50%{ opacity:1; } }
 .app > *{ animation:rise .55s cubic-bezier(.22,.9,.3,1) both; }
-.hero{ animation-delay:.04s; }
-.card{ animation-delay:.08s; }
-.rail-wrap{ animation-delay:.12s; }
-.list{ animation-delay:.16s; }
+.card{ animation-delay:.05s; }
+.list{ animation-delay:.1s; }
+@media (prefers-reduced-motion:reduce){ .app > *{ animation:none !important; } }
 
-@media (prefers-reduced-motion:reduce){
-  .app > *, .sky{ animation:none !important; }
-}
-/* The sunrise line is the first thing to go when height is short, because it
-   is the one row that says nothing new: the Fajr row's interval already ENDS at
-   sunrise, to the minute. 820px clears every iPhone from the 12 mini (812)
-   down; a 6.1" screen (852) keeps the label. Measured, not assumed. */
-@media (max-height:820px){
-  .sun{ display:none; }
-}
-
-/* A 4.7" phone (SE 2/3, 667px) needs about 45px more than that. Everything in
-   here is a measured shave, not a redesign: the screen still shows the same
-   information in the same order. */
-@media (max-height:740px){
-  .hero .eyebrow{ font-size:10px; }
-  .hero{ padding:8px 0 10px; }
+/* Short phones (a 4.7" SE, or Safari with its bars showing). Measured shaves,
+   not a redesign - the same information in the same order. */
+@media (max-height:700px){
+  .hero{ padding:10px 0 12px; }
+  .count{ font-size:clamp(40px, 12.5vw, 58px); }
+  .at{ margin-top:5px; font-size:13px; }
   .card{ padding:11px 13px 12px; }
-  .count{ font-size:clamp(40px, 12.5vw, 56px); }
-  .rail-wrap{ margin-top:10px; }
-  .list{ margin-top:7px; }
-  .row{ padding-top:6px; padding-bottom:6px; }
-}
-
-/* Apart from that one, there are deliberately NO height breakpoints. Two of them were tried and both
-   were wrong by measurement: min-height:860px missed the 6.1" Pro (852px) by
-   eight pixels and left a ~115px void under Isha on the likeliest phone in the
-   world, and max-height:700px compressed the layout by one pixel. The clamps
-   above scale continuously from a 667px SE to a 932px Pro Max instead, so there
-   is no edge to fall off. */
-/* On a 320px iPhone SE the row runs out of width and ellipsises the tag away
-   mid-word. The dashed rule already says "not one of the five", so drop it. */
-@media (max-width:360px){
-  /* The "voluntar" tag is the one that can go: the dashed rule beside the row
-     already says Tahajjud is not one of the five. The "aseară" tag stays at
-     every width, because without it the Isha row contradicts the Maghrib row
-     above it and there is nothing else on screen to explain why. */
-  .tag.opt{ display:none; }
-  .r-tr{ font-size:12px; margin-left:7px; }
+  .list{ margin-top:10px; }
+  .row{ padding-top:7px; padding-bottom:7px; }
 }
 </style>
 </head>
@@ -374,16 +264,8 @@ body{
 <div class="sky"></div>
 <div class="app">
 
-  <header class="head">
-    <div class="who">
-      <div class="place"><b>Tilburg</b> &middot; Moscheea El-Feth</div>
-      <div class="date" id="date">&nbsp;</div>
-    </div>
-    <div class="clock num" id="clock">&nbsp;</div>
-  </header>
-
-  <section class="hero" id="hero">
-    <div class="eyebrow">Urm&#259;torul adhan</div>
+  <section class="hero">
+    <div class="eyebrow">Next</div>
     <div class="next-name" id="nextName">&nbsp;</div>
     <div class="count num" id="count">&nbsp;</div>
     <div class="at num" id="nextAt">&nbsp;</div>
@@ -391,7 +273,7 @@ body{
 
   <section class="card" id="card">
     <div class="card-top">
-      <div class="card-left"><div class="eyebrow" id="openLabel">Acum</div></div>
+      <div class="eyebrow" id="openLabel">Now</div>
       <div class="remain num" id="remain">&nbsp;</div>
     </div>
     <div class="open-name" id="openName">&nbsp;</div>
@@ -400,38 +282,27 @@ body{
       <div class="track"><div class="fill" id="fill"></div><div class="head-dot" id="dot"></div></div>
       <div class="bar-end num" id="barTo">&nbsp;</div>
     </div>
-    <div class="tah-note hide" id="tahNote"></div>
-  </section>
-
-  <section class="rail-wrap" id="railWrap">
-    <div class="tah-strip" id="tahStrip"></div>
-    <div class="rail">
-      <div class="segs" id="segs"></div>
-      <div class="now-mark" id="nowMark"></div>
-    </div>
-    <div class="ticks" id="ticks"></div>
   </section>
 
   <ul class="list" id="list"></ul>
-  <div class="tomorrow hide" id="tomorrow"></div>
-
   <div class="msg hide" id="msg"></div>
 </div>
 
+<noscript><div class="msg">This app needs JavaScript.</div></noscript>
+
 <!-- The schedule, compiled in. See loadSeed() for why this exists as well as
      times.json. Regenerate with: node tools/embed-seed.js -->
-<script type="application/json" id="seed">{"place":"Tilburg, Nederland","mosque":"Moscheea El-Feth","timeZone":"Europe/Amsterdam","sourceYear":2026,"generated":"2026-09-22","note":"minutes after 00:00 UTC on the given calendar day; the app adds them to UTC midnight and renders the instant in Europe/Amsterdam, so the clock times stay correct in any year whatever date daylight saving moves to. src: f = mosque feed (el-feth.nl), p = printed mosque calendar (wins over the feed), m = mawaqit, c = interpolated. Generated by data/build-times.js — do not edit by hand.","days":{"01-01":{"fajr":383,"sunrise":468,"dhuhr":703,"asr":808,"maghrib":939,"isha":1049,"src":"f"},"01-02":{"fajr":383,"sunrise":468,"dhuhr":703,"asr":809,"maghrib":941,"isha":1051,"src":"f"},"01-03":{"fajr":383,"sunrise":468,"dhuhr":704,"asr":810,"maghrib":942,"isha":1052,"src":"f"},"01-04":{"fajr":382,"sunrise":467,"dhuhr":704,"asr":812,"maghrib":943,"isha":1052,"src":"f"},"01-05":{"fajr":382,"sunrise":467,"dhuhr":705,"asr":813,"maghrib":944,"isha":1053,"src":"f"},"01-06":{"fajr":382,"sunrise":467,"dhuhr":706,"asr":814,"maghrib":945,"isha":1055,"src":"f"},"01-07":{"fajr":381,"sunrise":466,"dhuhr":707,"asr":815,"maghrib":947,"isha":1057,"src":"f"},"01-08":{"fajr":381,"sunrise":466,"dhuhr":707,"asr":816,"maghrib":948,"isha":1058,"src":"f"},"01-09":{"fajr":380,"sunrise":465,"dhuhr":707,"asr":817,"maghrib":950,"isha":1058,"src":"f"},"01-10":{"fajr":380,"sunrise":465,"dhuhr":707,"asr":819,"maghrib":951,"isha":1059,"src":"f"},"01-11":{"fajr":379,"sunrise":464,"dhuhr":708,"asr":821,"maghrib":952,"isha":1061,"src":"f"},"01-12":{"fajr":378,"sunrise":463,"dhuhr":708,"asr":822,"maghrib":954,"isha":1062,"src":"f"},"01-13":{"fajr":378,"sunrise":463,"dhuhr":708,"asr":823,"maghrib":955,"isha":1063,"src":"f"},"01-14":{"fajr":377,"sunrise":462,"dhuhr":708,"asr":824,"maghrib":957,"isha":1064,"src":"f"},"01-15":{"fajr":376,"sunrise":461,"dhuhr":709,"asr":826,"maghrib":959,"isha":1066,"src":"f"},"01-16":{"fajr":375,"sunrise":460,"dhuhr":709,"asr":827,"maghrib":960,"isha":1067,"src":"f"},"01-17":{"fajr":374,"sunrise":459,"dhuhr":710,"asr":828,"maghrib":962,"isha":1069,"src":"f"},"01-18":{"fajr":373,"sunrise":458,"dhuhr":710,"asr":829,"maghrib":963,"isha":1071,"src":"f"},"01-19":{"fajr":372,"sunrise":457,"dhuhr":710,"asr":831,"maghrib":965,"isha":1073,"src":"f"},"01-20":{"fajr":371,"sunrise":456,"dhuhr":710,"asr":833,"maghrib":967,"isha":1075,"src":"f"},"01-21":{"fajr":370,"sunrise":455,"dhuhr":711,"asr":834,"maghrib":968,"isha":1077,"src":"f"},"01-22":{"fajr":369,"sunrise":454,"dhuhr":711,"asr":836,"maghrib":970,"isha":1078,"src":"f"},"01-23":{"fajr":367,"sunrise":452,"dhuhr":711,"asr":837,"maghrib":972,"isha":1079,"src":"f"},"01-24":{"fajr":366,"sunrise":451,"dhuhr":712,"asr":838,"maghrib":974,"isha":1080,"src":"f"},"01-25":{"fajr":365,"sunrise":450,"dhuhr":712,"asr":839,"maghrib":975,"isha":1081,"src":"f"},"01-26":{"fajr":363,"sunrise":448,"dhuhr":712,"asr":841,"maghrib":977,"isha":1082,"src":"f"},"01-27":{"fajr":362,"sunrise":447,"dhuhr":713,"asr":840,"maghrib":979,"isha":1083,"src":"f"},"01-28":{"fajr":361,"sunrise":446,"dhuhr":713,"asr":843,"maghrib":981,"isha":1083,"src":"f"},"01-29":{"fajr":359,"sunrise":444,"dhuhr":713,"asr":845,"maghrib":983,"isha":1084,"src":"f"},"01-30":{"fajr":358,"sunrise":443,"dhuhr":713,"asr":846,"maghrib":985,"isha":1085,"src":"f"},"01-31":{"fajr":356,"sunrise":441,"dhuhr":713,"asr":847,"maghrib":986,"isha":1085,"src":"f"},"02-01":{"fajr":355,"sunrise":440,"dhuhr":714,"asr":849,"maghrib":988,"isha":1087,"src":"f"},"02-02":{"fajr":353,"sunrise":438,"dhuhr":714,"asr":850,"maghrib":990,"isha":1089,"src":"f"},"02-03":{"fajr":351,"sunrise":436,"dhuhr":714,"asr":851,"maghrib":992,"isha":1091,"src":"f"},"02-04":{"fajr":350,"sunrise":435,"dhuhr":714,"asr":853,"maghrib":994,"isha":1092,"src":"f"},"02-05":{"fajr":348,"sunrise":433,"dhuhr":714,"asr":855,"maghrib":996,"isha":1094,"src":"f"},"02-06":{"fajr":346,"sunrise":431,"dhuhr":714,"asr":857,"maghrib":998,"isha":1096,"src":"f"},"02-07":{"fajr":345,"sunrise":430,"dhuhr":714,"asr":858,"maghrib":999,"isha":1098,"src":"f"},"02-08":{"fajr":343,"sunrise":428,"dhuhr":714,"asr":860,"maghrib":1001,"isha":1099,"src":"f"},"02-09":{"fajr":341,"sunrise":426,"dhuhr":714,"asr":862,"maghrib":1003,"isha":1101,"src":"f"},"02-10":{"fajr":339,"sunrise":424,"dhuhr":714,"asr":863,"maghrib":1005,"isha":1103,"src":"f"},"02-11":{"fajr":337,"sunrise":422,"dhuhr":714,"asr":864,"maghrib":1007,"isha":1105,"src":"f"},"02-12":{"fajr":335,"sunrise":420,"dhuhr":714,"asr":866,"maghrib":1009,"isha":1106,"src":"f"},"02-13":{"fajr":333,"sunrise":418,"dhuhr":714,"asr":867,"maghrib":1011,"isha":1107,"src":"f"},"02-14":{"fajr":332,"sunrise":417,"dhuhr":714,"asr":869,"maghrib":1012,"isha":1109,"src":"f"},"02-15":{"fajr":330,"sunrise":415,"dhuhr":714,"asr":870,"maghrib":1014,"isha":1111,"src":"f"},"02-16":{"fajr":328,"sunrise":413,"dhuhr":714,"asr":871,"maghrib":1016,"isha":1112,"src":"f"},"02-17":{"fajr":326,"sunrise":411,"dhuhr":713,"asr":872,"maghrib":1018,"isha":1114,"src":"f"},"02-18":{"fajr":324,"sunrise":409,"dhuhr":713,"asr":874,"maghrib":1020,"isha":1116,"src":"f"},"02-19":{"fajr":322,"sunrise":407,"dhuhr":713,"asr":876,"maghrib":1022,"isha":1117,"src":"f"},"02-20":{"fajr":320,"sunrise":405,"dhuhr":713,"asr":877,"maghrib":1024,"isha":1118,"src":"f"},"02-21":{"fajr":318,"sunrise":403,"dhuhr":713,"asr":879,"maghrib":1025,"isha":1120,"src":"f"},"02-22":{"fajr":315,"sunrise":400,"dhuhr":713,"asr":880,"maghrib":1027,"isha":1121,"src":"f"},"02-23":{"fajr":313,"sunrise":398,"dhuhr":713,"asr":881,"maghrib":1029,"isha":1122,"src":"f"},"02-24":{"fajr":311,"sunrise":396,"dhuhr":713,"asr":882,"maghrib":1031,"isha":1124,"src":"f"},"02-25":{"fajr":309,"sunrise":394,"dhuhr":713,"asr":884,"maghrib":1033,"isha":1126,"src":"f"},"02-26":{"fajr":307,"sunrise":392,"dhuhr":713,"asr":886,"maghrib":1035,"isha":1128,"src":"f"},"02-27":{"fajr":305,"sunrise":390,"dhuhr":713,"asr":887,"maghrib":1036,"isha":1130,"src":"f"},"02-28":{"fajr":303,"sunrise":388,"dhuhr":713,"asr":889,"maghrib":1038,"isha":1131,"src":"f"},"03-01":{"fajr":300,"sunrise":385,"dhuhr":712,"asr":890,"maghrib":1040,"isha":1132,"src":"f"},"03-02":{"fajr":298,"sunrise":383,"dhuhr":712,"asr":891,"maghrib":1042,"isha":1132,"src":"f"},"03-03":{"fajr":296,"sunrise":381,"dhuhr":712,"asr":892,"maghrib":1044,"isha":1133,"src":"f"},"03-04":{"fajr":294,"sunrise":379,"dhuhr":712,"asr":894,"maghrib":1045,"isha":1134,"src":"f"},"03-05":{"fajr":292,"sunrise":377,"dhuhr":712,"asr":895,"maghrib":1047,"isha":1136,"src":"f"},"03-06":{"fajr":289,"sunrise":374,"dhuhr":712,"asr":896,"maghrib":1049,"isha":1138,"src":"f"},"03-07":{"fajr":287,"sunrise":372,"dhuhr":711,"asr":897,"maghrib":1051,"isha":1140,"src":"f"},"03-08":{"fajr":285,"sunrise":370,"dhuhr":711,"asr":899,"maghrib":1052,"isha":1142,"src":"f"},"03-09":{"fajr":283,"sunrise":368,"dhuhr":711,"asr":900,"maghrib":1054,"isha":1143,"src":"f"},"03-10":{"fajr":280,"sunrise":365,"dhuhr":710,"asr":901,"maghrib":1056,"isha":1144,"src":"f"},"03-11":{"fajr":278,"sunrise":363,"dhuhr":710,"asr":902,"maghrib":1058,"isha":1146,"src":"f"},"03-12":{"fajr":276,"sunrise":361,"dhuhr":710,"asr":903,"maghrib":1060,"isha":1148,"src":"f"},"03-13":{"fajr":273,"sunrise":358,"dhuhr":709,"asr":904,"maghrib":1061,"isha":1150,"src":"f"},"03-14":{"fajr":271,"sunrise":356,"dhuhr":709,"asr":905,"maghrib":1063,"isha":1151,"src":"f"},"03-15":{"fajr":269,"sunrise":354,"dhuhr":708,"asr":907,"maghrib":1065,"isha":1153,"src":"f"},"03-16":{"fajr":267,"sunrise":352,"dhuhr":708,"asr":908,"maghrib":1067,"isha":1155,"src":"f"},"03-17":{"fajr":264,"sunrise":349,"dhuhr":708,"asr":909,"maghrib":1068,"isha":1156,"src":"f"},"03-18":{"fajr":262,"sunrise":347,"dhuhr":708,"asr":910,"maghrib":1070,"isha":1159,"src":"f"},"03-19":{"fajr":260,"sunrise":345,"dhuhr":707,"asr":912,"maghrib":1072,"isha":1161,"src":"f"},"03-20":{"fajr":257,"sunrise":342,"dhuhr":707,"asr":913,"maghrib":1073,"isha":1163,"src":"f"},"03-21":{"fajr":255,"sunrise":340,"dhuhr":707,"asr":914,"maghrib":1075,"isha":1166,"src":"f"},"03-22":{"fajr":253,"sunrise":338,"dhuhr":707,"asr":915,"maghrib":1077,"isha":1168,"src":"f"},"03-23":{"fajr":250,"sunrise":335,"dhuhr":706,"asr":916,"maghrib":1079,"isha":1170,"src":"f"},"03-24":{"fajr":248,"sunrise":333,"dhuhr":706,"asr":918,"maghrib":1080,"isha":1173,"src":"f"},"03-25":{"fajr":246,"sunrise":331,"dhuhr":706,"asr":919,"maghrib":1082,"isha":1175,"src":"f"},"03-26":{"fajr":243,"sunrise":328,"dhuhr":706,"asr":920,"maghrib":1084,"isha":1176,"src":"f"},"03-27":{"fajr":241,"sunrise":326,"dhuhr":705,"asr":921,"maghrib":1085,"isha":1178,"src":"f"},"03-28":{"fajr":239,"sunrise":324,"dhuhr":705,"asr":921,"maghrib":1087,"isha":1180,"src":"f"},"03-29":{"fajr":236,"sunrise":321,"dhuhr":705,"asr":922,"maghrib":1089,"isha":1182,"src":"f"},"03-30":{"fajr":234,"sunrise":319,"dhuhr":705,"asr":923,"maghrib":1091,"isha":1184,"src":"f"},"03-31":{"fajr":232,"sunrise":317,"dhuhr":704,"asr":925,"maghrib":1092,"isha":1186,"src":"f"},"04-01":{"fajr":230,"sunrise":315,"dhuhr":704,"asr":926,"maghrib":1094,"isha":1188,"src":"f"},"04-02":{"fajr":227,"sunrise":312,"dhuhr":704,"asr":926,"maghrib":1096,"isha":1189,"src":"f"},"04-03":{"fajr":225,"sunrise":310,"dhuhr":703,"asr":927,"maghrib":1097,"isha":1190,"src":"f"},"04-04":{"fajr":223,"sunrise":308,"dhuhr":703,"asr":928,"maghrib":1099,"isha":1191,"src":"f"},"04-05":{"fajr":220,"sunrise":305,"dhuhr":703,"asr":928,"maghrib":1101,"isha":1193,"src":"f"},"04-06":{"fajr":218,"sunrise":303,"dhuhr":702,"asr":929,"maghrib":1103,"isha":1194,"src":"f"},"04-07":{"fajr":216,"sunrise":301,"dhuhr":702,"asr":930,"maghrib":1104,"isha":1196,"src":"f"},"04-08":{"fajr":214,"sunrise":299,"dhuhr":702,"asr":931,"maghrib":1106,"isha":1197,"src":"f"},"04-09":{"fajr":211,"sunrise":296,"dhuhr":701,"asr":931,"maghrib":1108,"isha":1199,"src":"f"},"04-10":{"fajr":209,"sunrise":294,"dhuhr":701,"asr":932,"maghrib":1109,"isha":1200,"src":"f"},"04-11":{"fajr":207,"sunrise":292,"dhuhr":701,"asr":932,"maghrib":1111,"isha":1201,"src":"f"},"04-12":{"fajr":205,"sunrise":290,"dhuhr":701,"asr":933,"maghrib":1113,"isha":1202,"src":"f"},"04-13":{"fajr":202,"sunrise":287,"dhuhr":700,"asr":934,"maghrib":1115,"isha":1204,"src":"f"},"04-14":{"fajr":200,"sunrise":285,"dhuhr":700,"asr":935,"maghrib":1116,"isha":1206,"src":"f"},"04-15":{"fajr":198,"sunrise":283,"dhuhr":700,"asr":936,"maghrib":1118,"isha":1208,"src":"f"},"04-16":{"fajr":196,"sunrise":281,"dhuhr":700,"asr":936,"maghrib":1120,"isha":1209,"src":"f"},"04-17":{"fajr":194,"sunrise":279,"dhuhr":699,"asr":937,"maghrib":1121,"isha":1210,"src":"f"},"04-18":{"fajr":192,"sunrise":277,"dhuhr":699,"asr":937,"maghrib":1123,"isha":1212,"src":"f"},"04-19":{"fajr":189,"sunrise":274,"dhuhr":699,"asr":938,"maghrib":1125,"isha":1214,"src":"f"},"04-20":{"fajr":187,"sunrise":272,"dhuhr":699,"asr":939,"maghrib":1127,"isha":1215,"src":"f"},"04-21":{"fajr":185,"sunrise":270,"dhuhr":699,"asr":940,"maghrib":1128,"isha":1216,"src":"f"},"04-22":{"fajr":183,"sunrise":268,"dhuhr":698,"asr":941,"maghrib":1130,"isha":1218,"src":"f"},"04-23":{"fajr":181,"sunrise":266,"dhuhr":698,"asr":941,"maghrib":1132,"isha":1220,"src":"f"},"04-24":{"fajr":179,"sunrise":264,"dhuhr":698,"asr":942,"maghrib":1133,"isha":1221,"src":"f"},"04-25":{"fajr":177,"sunrise":262,"dhuhr":698,"asr":943,"maghrib":1135,"isha":1223,"src":"f"},"04-26":{"fajr":175,"sunrise":260,"dhuhr":698,"asr":944,"maghrib":1137,"isha":1225,"src":"f"},"04-27":{"fajr":173,"sunrise":258,"dhuhr":697,"asr":944,"maghrib":1138,"isha":1227,"src":"f"},"04-28":{"fajr":171,"sunrise":256,"dhuhr":697,"asr":945,"maghrib":1140,"isha":1229,"src":"f"},"04-29":{"fajr":169,"sunrise":254,"dhuhr":697,"asr":946,"maghrib":1142,"isha":1230,"src":"f"},"04-30":{"fajr":167,"sunrise":252,"dhuhr":697,"asr":947,"maghrib":1143,"isha":1232,"src":"f"},"05-01":{"fajr":165,"sunrise":250,"dhuhr":697,"asr":948,"maghrib":1145,"isha":1234,"src":"f"},"05-02":{"fajr":163,"sunrise":248,"dhuhr":697,"asr":948,"maghrib":1147,"isha":1235,"src":"f"},"05-03":{"fajr":161,"sunrise":246,"dhuhr":697,"asr":948,"maghrib":1148,"isha":1236,"src":"f"},"05-04":{"fajr":159,"sunrise":244,"dhuhr":697,"asr":948,"maghrib":1150,"isha":1238,"src":"f"},"05-05":{"fajr":158,"sunrise":243,"dhuhr":697,"asr":949,"maghrib":1152,"isha":1239,"src":"f"},"05-06":{"fajr":156,"sunrise":241,"dhuhr":697,"asr":949,"maghrib":1153,"isha":1241,"src":"f"},"05-07":{"fajr":154,"sunrise":239,"dhuhr":697,"asr":949,"maghrib":1155,"isha":1243,"src":"f"},"05-08":{"fajr":152,"sunrise":237,"dhuhr":696,"asr":950,"maghrib":1157,"isha":1244,"src":"f"},"05-09":{"fajr":151,"sunrise":236,"dhuhr":696,"asr":950,"maghrib":1158,"isha":1246,"src":"f"},"05-10":{"fajr":149,"sunrise":234,"dhuhr":696,"asr":950,"maghrib":1160,"isha":1247,"src":"f"},"05-11":{"fajr":147,"sunrise":232,"dhuhr":696,"asr":951,"maghrib":1162,"isha":1248,"src":"f"},"05-12":{"fajr":146,"sunrise":231,"dhuhr":696,"asr":951,"maghrib":1163,"isha":1250,"src":"f"},"05-13":{"fajr":144,"sunrise":229,"dhuhr":696,"asr":951,"maghrib":1165,"isha":1251,"src":"f"},"05-14":{"fajr":142,"sunrise":227,"dhuhr":696,"asr":951,"maghrib":1166,"isha":1253,"src":"f"},"05-15":{"fajr":141,"sunrise":226,"dhuhr":696,"asr":952,"maghrib":1168,"isha":1255,"src":"f"},"05-16":{"fajr":139,"sunrise":224,"dhuhr":696,"asr":952,"maghrib":1169,"isha":1256,"src":"f"},"05-17":{"fajr":138,"sunrise":223,"dhuhr":696,"asr":953,"maghrib":1171,"isha":1258,"src":"f"},"05-18":{"fajr":137,"sunrise":222,"dhuhr":696,"asr":954,"maghrib":1172,"isha":1259,"src":"f"},"05-19":{"fajr":135,"sunrise":220,"dhuhr":696,"asr":955,"maghrib":1174,"isha":1261,"src":"f"},"05-20":{"fajr":134,"sunrise":219,"dhuhr":696,"asr":955,"maghrib":1175,"isha":1262,"src":"f"},"05-21":{"fajr":133,"sunrise":218,"dhuhr":697,"asr":956,"maghrib":1177,"isha":1263,"src":"f"},"05-22":{"fajr":131,"sunrise":216,"dhuhr":697,"asr":956,"maghrib":1178,"isha":1265,"src":"f"},"05-23":{"fajr":130,"sunrise":215,"dhuhr":697,"asr":956,"maghrib":1179,"isha":1266,"src":"f"},"05-24":{"fajr":129,"sunrise":214,"dhuhr":697,"asr":957,"maghrib":1181,"isha":1268,"src":"f"},"05-25":{"fajr":128,"sunrise":213,"dhuhr":697,"asr":957,"maghrib":1182,"isha":1269,"src":"f"},"05-26":{"fajr":127,"sunrise":212,"dhuhr":697,"asr":957,"maghrib":1183,"isha":1270,"src":"f"},"05-27":{"fajr":125,"sunrise":210,"dhuhr":697,"asr":958,"maghrib":1185,"isha":1272,"src":"f"},"05-28":{"fajr":124,"sunrise":209,"dhuhr":697,"asr":958,"maghrib":1186,"isha":1273,"src":"f"},"05-29":{"fajr":124,"sunrise":209,"dhuhr":697,"asr":958,"maghrib":1187,"isha":1274,"src":"f"},"05-30":{"fajr":123,"sunrise":208,"dhuhr":698,"asr":959,"maghrib":1188,"isha":1275,"src":"f"},"05-31":{"fajr":122,"sunrise":207,"dhuhr":698,"asr":959,"maghrib":1189,"isha":1277,"src":"f"},"06-01":{"fajr":121,"sunrise":206,"dhuhr":698,"asr":959,"maghrib":1191,"isha":1278,"src":"f"},"06-02":{"fajr":120,"sunrise":205,"dhuhr":698,"asr":959,"maghrib":1192,"isha":1278,"src":"f"},"06-03":{"fajr":119,"sunrise":204,"dhuhr":698,"asr":959,"maghrib":1193,"isha":1279,"src":"f"},"06-04":{"fajr":119,"sunrise":204,"dhuhr":698,"asr":959,"maghrib":1194,"isha":1280,"src":"f"},"06-05":{"fajr":118,"sunrise":203,"dhuhr":698,"asr":959,"maghrib":1195,"isha":1281,"src":"f"},"06-06":{"fajr":117,"sunrise":202,"dhuhr":699,"asr":960,"maghrib":1196,"isha":1282,"src":"f"},"06-07":{"fajr":117,"sunrise":202,"dhuhr":699,"asr":960,"maghrib":1196,"isha":1283,"src":"f"},"06-08":{"fajr":116,"sunrise":201,"dhuhr":699,"asr":961,"maghrib":1197,"isha":1284,"src":"f"},"06-09":{"fajr":116,"sunrise":201,"dhuhr":699,"asr":961,"maghrib":1198,"isha":1285,"src":"f"},"06-10":{"fajr":116,"sunrise":201,"dhuhr":699,"asr":961,"maghrib":1199,"isha":1286,"src":"f"},"06-11":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":962,"maghrib":1199,"isha":1286,"src":"f"},"06-12":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":962,"maghrib":1200,"isha":1287,"src":"f"},"06-13":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":962,"maghrib":1201,"isha":1288,"src":"f"},"06-14":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":963,"maghrib":1201,"isha":1288,"src":"f"},"06-15":{"fajr":114,"sunrise":199,"dhuhr":700,"asr":963,"maghrib":1202,"isha":1289,"src":"f"},"06-16":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":963,"maghrib":1202,"isha":1289,"src":"f"},"06-17":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":964,"maghrib":1203,"isha":1290,"src":"f"},"06-18":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":964,"maghrib":1203,"isha":1290,"src":"f"},"06-19":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":964,"maghrib":1203,"isha":1291,"src":"f"},"06-20":{"fajr":115,"sunrise":200,"dhuhr":701,"asr":964,"maghrib":1204,"isha":1291,"src":"f"},"06-21":{"fajr":115,"sunrise":200,"dhuhr":701,"asr":965,"maghrib":1204,"isha":1291,"src":"f"},"06-22":{"fajr":115,"sunrise":200,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1291,"src":"f"},"06-23":{"fajr":115,"sunrise":200,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-24":{"fajr":116,"sunrise":201,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-25":{"fajr":116,"sunrise":201,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-26":{"fajr":117,"sunrise":202,"dhuhr":703,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-27":{"fajr":117,"sunrise":202,"dhuhr":703,"asr":966,"maghrib":1204,"isha":1292,"src":"f"},"06-28":{"fajr":118,"sunrise":203,"dhuhr":703,"asr":966,"maghrib":1204,"isha":1291,"src":"f"},"06-29":{"fajr":118,"sunrise":203,"dhuhr":703,"asr":966,"maghrib":1204,"isha":1291,"src":"f"},"06-30":{"fajr":119,"sunrise":204,"dhuhr":704,"asr":966,"maghrib":1203,"isha":1291,"src":"f"},"07-01":{"fajr":120,"sunrise":205,"dhuhr":704,"asr":966,"maghrib":1203,"isha":1291,"src":"f"},"07-02":{"fajr":120,"sunrise":205,"dhuhr":704,"asr":966,"maghrib":1203,"isha":1291,"src":"f"},"07-03":{"fajr":121,"sunrise":206,"dhuhr":704,"asr":966,"maghrib":1202,"isha":1291,"src":"f"},"07-04":{"fajr":122,"sunrise":207,"dhuhr":704,"asr":966,"maghrib":1202,"isha":1291,"src":"f"},"07-05":{"fajr":123,"sunrise":208,"dhuhr":704,"asr":966,"maghrib":1201,"isha":1291,"src":"f"},"07-06":{"fajr":124,"sunrise":209,"dhuhr":704,"asr":966,"maghrib":1201,"isha":1290,"src":"f"},"07-07":{"fajr":125,"sunrise":210,"dhuhr":704,"asr":966,"maghrib":1200,"isha":1290,"src":"f"},"07-08":{"fajr":125,"sunrise":210,"dhuhr":705,"asr":966,"maghrib":1199,"isha":1289,"src":"f"},"07-09":{"fajr":126,"sunrise":211,"dhuhr":705,"asr":966,"maghrib":1199,"isha":1289,"src":"f"},"07-10":{"fajr":128,"sunrise":213,"dhuhr":705,"asr":966,"maghrib":1198,"isha":1288,"src":"f"},"07-11":{"fajr":129,"sunrise":214,"dhuhr":705,"asr":965,"maghrib":1197,"isha":1288,"src":"f"},"07-12":{"fajr":130,"sunrise":215,"dhuhr":705,"asr":965,"maghrib":1196,"isha":1287,"src":"f"},"07-13":{"fajr":131,"sunrise":216,"dhuhr":705,"asr":965,"maghrib":1195,"isha":1286,"src":"f"},"07-14":{"fajr":132,"sunrise":217,"dhuhr":706,"asr":965,"maghrib":1194,"isha":1285,"src":"f"},"07-15":{"fajr":133,"sunrise":218,"dhuhr":706,"asr":965,"maghrib":1193,"isha":1285,"src":"f"},"07-16":{"fajr":134,"sunrise":219,"dhuhr":706,"asr":964,"maghrib":1192,"isha":1284,"src":"f"},"07-17":{"fajr":136,"sunrise":221,"dhuhr":706,"asr":964,"maghrib":1191,"isha":1283,"src":"f"},"07-18":{"fajr":137,"sunrise":222,"dhuhr":706,"asr":964,"maghrib":1190,"isha":1282,"src":"f"},"07-19":{"fajr":138,"sunrise":223,"dhuhr":706,"asr":963,"maghrib":1189,"isha":1281,"src":"f"},"07-20":{"fajr":140,"sunrise":225,"dhuhr":706,"asr":963,"maghrib":1187,"isha":1279,"src":"f"},"07-21":{"fajr":141,"sunrise":226,"dhuhr":706,"asr":963,"maghrib":1186,"isha":1277,"src":"f"},"07-22":{"fajr":142,"sunrise":227,"dhuhr":707,"asr":962,"maghrib":1185,"isha":1276,"src":"f"},"07-23":{"fajr":144,"sunrise":229,"dhuhr":707,"asr":962,"maghrib":1183,"isha":1275,"src":"f"},"07-24":{"fajr":145,"sunrise":230,"dhuhr":707,"asr":961,"maghrib":1182,"isha":1273,"src":"f"},"07-25":{"fajr":147,"sunrise":232,"dhuhr":707,"asr":961,"maghrib":1181,"isha":1272,"src":"f"},"07-26":{"fajr":148,"sunrise":233,"dhuhr":707,"asr":960,"maghrib":1179,"isha":1271,"src":"f"},"07-27":{"fajr":150,"sunrise":235,"dhuhr":707,"asr":960,"maghrib":1178,"isha":1269,"src":"f"},"07-28":{"fajr":151,"sunrise":236,"dhuhr":707,"asr":959,"maghrib":1176,"isha":1268,"src":"f"},"07-29":{"fajr":153,"sunrise":238,"dhuhr":707,"asr":959,"maghrib":1174,"isha":1266,"src":"f"},"07-30":{"fajr":154,"sunrise":239,"dhuhr":707,"asr":958,"maghrib":1173,"isha":1265,"src":"f"},"07-31":{"fajr":156,"sunrise":241,"dhuhr":706,"asr":957,"maghrib":1171,"isha":1263,"src":"f"},"08-01":{"fajr":157,"sunrise":242,"dhuhr":706,"asr":957,"maghrib":1170,"isha":1261,"src":"f"},"08-02":{"fajr":159,"sunrise":244,"dhuhr":704,"asr":956,"maghrib":1168,"isha":1260,"src":"f"},"08-03":{"fajr":160,"sunrise":245,"dhuhr":704,"asr":955,"maghrib":1166,"isha":1258,"src":"f"},"08-04":{"fajr":162,"sunrise":247,"dhuhr":704,"asr":954,"maghrib":1164,"isha":1257,"src":"f"},"08-05":{"fajr":163,"sunrise":248,"dhuhr":703,"asr":952,"maghrib":1163,"isha":1255,"src":"f"},"08-06":{"fajr":165,"sunrise":250,"dhuhr":703,"asr":950,"maghrib":1161,"isha":1253,"src":"f"},"08-07":{"fajr":166,"sunrise":251,"dhuhr":703,"asr":948,"maghrib":1159,"isha":1251,"src":"f"},"08-08":{"fajr":168,"sunrise":253,"dhuhr":703,"asr":946,"maghrib":1157,"isha":1249,"src":"f"},"08-09":{"fajr":170,"sunrise":255,"dhuhr":703,"asr":945,"maghrib":1155,"isha":1248,"src":"f"},"08-10":{"fajr":171,"sunrise":256,"dhuhr":703,"asr":944,"maghrib":1153,"isha":1246,"src":"f"},"08-11":{"fajr":173,"sunrise":258,"dhuhr":703,"asr":943,"maghrib":1151,"isha":1244,"src":"f"},"08-12":{"fajr":174,"sunrise":259,"dhuhr":702,"asr":942,"maghrib":1149,"isha":1242,"src":"f"},"08-13":{"fajr":176,"sunrise":261,"dhuhr":702,"asr":940,"maghrib":1147,"isha":1240,"src":"f"},"08-14":{"fajr":178,"sunrise":263,"dhuhr":702,"asr":939,"maghrib":1145,"isha":1238,"src":"f"},"08-15":{"fajr":179,"sunrise":264,"dhuhr":702,"asr":938,"maghrib":1143,"isha":1236,"src":"f"},"08-16":{"fajr":181,"sunrise":266,"dhuhr":702,"asr":937,"maghrib":1141,"isha":1234,"src":"f"},"08-17":{"fajr":183,"sunrise":268,"dhuhr":702,"asr":936,"maghrib":1139,"isha":1232,"src":"f"},"08-18":{"fajr":184,"sunrise":269,"dhuhr":702,"asr":935,"maghrib":1137,"isha":1230,"src":"f"},"08-19":{"fajr":186,"sunrise":271,"dhuhr":701,"asr":934,"maghrib":1135,"isha":1228,"src":"f"},"08-20":{"fajr":187,"sunrise":272,"dhuhr":701,"asr":932,"maghrib":1133,"isha":1226,"src":"f"},"08-21":{"fajr":189,"sunrise":274,"dhuhr":701,"asr":931,"maghrib":1131,"isha":1224,"src":"f"},"08-22":{"fajr":191,"sunrise":276,"dhuhr":701,"asr":931,"maghrib":1129,"isha":1222,"src":"f"},"08-23":{"fajr":192,"sunrise":277,"dhuhr":701,"asr":930,"maghrib":1127,"isha":1220,"src":"f"},"08-24":{"fajr":194,"sunrise":279,"dhuhr":701,"asr":929,"maghrib":1125,"isha":1218,"src":"f"},"08-25":{"fajr":196,"sunrise":281,"dhuhr":701,"asr":928,"maghrib":1122,"isha":1216,"src":"f"},"08-26":{"fajr":197,"sunrise":282,"dhuhr":700,"asr":927,"maghrib":1120,"isha":1213,"src":"f"},"08-27":{"fajr":199,"sunrise":284,"dhuhr":700,"asr":926,"maghrib":1118,"isha":1211,"src":"f"},"08-28":{"fajr":201,"sunrise":286,"dhuhr":700,"asr":924,"maghrib":1116,"isha":1209,"src":"f"},"08-29":{"fajr":202,"sunrise":287,"dhuhr":700,"asr":923,"maghrib":1113,"isha":1207,"src":"f"},"08-30":{"fajr":204,"sunrise":289,"dhuhr":700,"asr":922,"maghrib":1111,"isha":1205,"src":"f"},"08-31":{"fajr":205,"sunrise":290,"dhuhr":700,"asr":922,"maghrib":1109,"isha":1203,"src":"f"},"09-01":{"fajr":207,"sunrise":292,"dhuhr":700,"asr":921,"maghrib":1107,"isha":1201,"src":"p"},"09-02":{"fajr":209,"sunrise":294,"dhuhr":700,"asr":920,"maghrib":1104,"isha":1200,"src":"f"},"09-03":{"fajr":210,"sunrise":295,"dhuhr":700,"asr":920,"maghrib":1102,"isha":1197,"src":"f"},"09-04":{"fajr":212,"sunrise":297,"dhuhr":699,"asr":919,"maghrib":1100,"isha":1195,"src":"f"},"09-05":{"fajr":214,"sunrise":299,"dhuhr":699,"asr":917,"maghrib":1098,"isha":1193,"src":"f"},"09-06":{"fajr":215,"sunrise":300,"dhuhr":699,"asr":915,"maghrib":1095,"isha":1190,"src":"f"},"09-07":{"fajr":217,"sunrise":302,"dhuhr":698,"asr":913,"maghrib":1093,"isha":1188,"src":"f"},"09-08":{"fajr":218,"sunrise":303,"dhuhr":698,"asr":912,"maghrib":1091,"isha":1185,"src":"f"},"09-09":{"fajr":220,"sunrise":305,"dhuhr":698,"asr":910,"maghrib":1088,"isha":1182,"src":"f"},"09-10":{"fajr":222,"sunrise":307,"dhuhr":697,"asr":909,"maghrib":1086,"isha":1180,"src":"f"},"09-11":{"fajr":223,"sunrise":308,"dhuhr":697,"asr":908,"maghrib":1084,"isha":1178,"src":"f"},"09-12":{"fajr":225,"sunrise":310,"dhuhr":697,"asr":906,"maghrib":1081,"isha":1175,"src":"f"},"09-13":{"fajr":227,"sunrise":312,"dhuhr":696,"asr":904,"maghrib":1079,"isha":1172,"src":"f"},"09-14":{"fajr":228,"sunrise":313,"dhuhr":696,"asr":903,"maghrib":1077,"isha":1170,"src":"f"},"09-15":{"fajr":230,"sunrise":315,"dhuhr":695,"asr":901,"maghrib":1074,"isha":1168,"src":"f"},"09-16":{"fajr":231,"sunrise":316,"dhuhr":695,"asr":900,"maghrib":1072,"isha":1165,"src":"f"},"09-17":{"fajr":233,"sunrise":318,"dhuhr":695,"asr":898,"maghrib":1070,"isha":1162,"src":"f"},"09-18":{"fajr":235,"sunrise":320,"dhuhr":694,"asr":896,"maghrib":1067,"isha":1159,"src":"f"},"09-19":{"fajr":236,"sunrise":321,"dhuhr":694,"asr":895,"maghrib":1065,"isha":1156,"src":"f"},"09-20":{"fajr":238,"sunrise":323,"dhuhr":694,"asr":894,"maghrib":1063,"isha":1154,"src":"f"},"09-21":{"fajr":240,"sunrise":325,"dhuhr":693,"asr":892,"maghrib":1060,"isha":1152,"src":"f"},"09-22":{"fajr":241,"sunrise":326,"dhuhr":693,"asr":890,"maghrib":1058,"isha":1150,"src":"f"},"09-23":{"fajr":243,"sunrise":328,"dhuhr":693,"asr":888,"maghrib":1056,"isha":1148,"src":"f"},"09-24":{"fajr":245,"sunrise":330,"dhuhr":692,"asr":886,"maghrib":1053,"isha":1145,"src":"f"},"09-25":{"fajr":246,"sunrise":331,"dhuhr":692,"asr":885,"maghrib":1051,"isha":1143,"src":"f"},"09-26":{"fajr":248,"sunrise":333,"dhuhr":692,"asr":884,"maghrib":1049,"isha":1141,"src":"f"},"09-27":{"fajr":250,"sunrise":335,"dhuhr":691,"asr":882,"maghrib":1046,"isha":1140,"src":"f"},"09-28":{"fajr":251,"sunrise":336,"dhuhr":691,"asr":880,"maghrib":1044,"isha":1138,"src":"f"},"09-29":{"fajr":253,"sunrise":338,"dhuhr":691,"asr":879,"maghrib":1042,"isha":1136,"src":"f"},"09-30":{"fajr":255,"sunrise":340,"dhuhr":690,"asr":877,"maghrib":1039,"isha":1134,"src":"f"},"10-01":{"fajr":256,"sunrise":341,"dhuhr":690,"asr":876,"maghrib":1037,"isha":1132,"src":"f"},"10-02":{"fajr":258,"sunrise":343,"dhuhr":690,"asr":873,"maghrib":1035,"isha":1130,"src":"f"},"10-03":{"fajr":260,"sunrise":345,"dhuhr":689,"asr":871,"maghrib":1032,"isha":1128,"src":"f"},"10-04":{"fajr":261,"sunrise":346,"dhuhr":689,"asr":870,"maghrib":1030,"isha":1126,"src":"f"},"10-05":{"fajr":263,"sunrise":348,"dhuhr":689,"asr":868,"maghrib":1028,"isha":1124,"src":"f"},"10-06":{"fajr":265,"sunrise":350,"dhuhr":688,"asr":866,"maghrib":1026,"isha":1123,"src":"f"},"10-07":{"fajr":266,"sunrise":351,"dhuhr":688,"asr":865,"maghrib":1023,"isha":1122,"src":"f"},"10-08":{"fajr":268,"sunrise":353,"dhuhr":688,"asr":863,"maghrib":1021,"isha":1120,"src":"f"},"10-09":{"fajr":270,"sunrise":355,"dhuhr":688,"asr":861,"maghrib":1019,"isha":1118,"src":"f"},"10-10":{"fajr":271,"sunrise":356,"dhuhr":687,"asr":859,"maghrib":1017,"isha":1117,"src":"f"},"10-11":{"fajr":273,"sunrise":358,"dhuhr":687,"asr":858,"maghrib":1014,"isha":1115,"src":"f"},"10-12":{"fajr":275,"sunrise":360,"dhuhr":687,"asr":856,"maghrib":1012,"isha":1113,"src":"f"},"10-13":{"fajr":277,"sunrise":362,"dhuhr":687,"asr":855,"maghrib":1010,"isha":1111,"src":"f"},"10-14":{"fajr":278,"sunrise":363,"dhuhr":686,"asr":853,"maghrib":1008,"isha":1109,"src":"f"},"10-15":{"fajr":280,"sunrise":365,"dhuhr":686,"asr":852,"maghrib":1006,"isha":1107,"src":"f"},"10-16":{"fajr":282,"sunrise":367,"dhuhr":686,"asr":850,"maghrib":1003,"isha":1105,"src":"f"},"10-17":{"fajr":283,"sunrise":368,"dhuhr":686,"asr":848,"maghrib":1001,"isha":1103,"src":"f"},"10-18":{"fajr":285,"sunrise":370,"dhuhr":686,"asr":846,"maghrib":999,"isha":1102,"src":"f"},"10-19":{"fajr":287,"sunrise":372,"dhuhr":686,"asr":844,"maghrib":997,"isha":1101,"src":"f"},"10-20":{"fajr":289,"sunrise":374,"dhuhr":685,"asr":842,"maghrib":995,"isha":1099,"src":"f"},"10-21":{"fajr":290,"sunrise":375,"dhuhr":685,"asr":840,"maghrib":993,"isha":1096,"src":"f"},"10-22":{"fajr":292,"sunrise":377,"dhuhr":685,"asr":839,"maghrib":991,"isha":1095,"src":"f"},"10-23":{"fajr":294,"sunrise":379,"dhuhr":685,"asr":837,"maghrib":989,"isha":1093,"src":"f"},"10-24":{"fajr":296,"sunrise":381,"dhuhr":684,"asr":835,"maghrib":987,"isha":1092,"src":"f"},"10-25":{"fajr":298,"sunrise":383,"dhuhr":684,"asr":833,"maghrib":985,"isha":1090,"src":"f"},"10-26":{"fajr":299,"sunrise":384,"dhuhr":684,"asr":831,"maghrib":983,"isha":1088,"src":"f"},"10-27":{"fajr":301,"sunrise":386,"dhuhr":684,"asr":830,"maghrib":981,"isha":1086,"src":"f"},"10-28":{"fajr":303,"sunrise":388,"dhuhr":684,"asr":828,"maghrib":979,"isha":1084,"src":"f"},"10-29":{"fajr":305,"sunrise":390,"dhuhr":684,"asr":827,"maghrib":977,"isha":1083,"src":"f"},"10-30":{"fajr":307,"sunrise":392,"dhuhr":684,"asr":826,"maghrib":975,"isha":1081,"src":"f"},"10-31":{"fajr":308,"sunrise":393,"dhuhr":684,"asr":824,"maghrib":973,"isha":1080,"src":"f"},"11-01":{"fajr":310,"sunrise":395,"dhuhr":684,"asr":823,"maghrib":971,"isha":1079,"src":"f"},"11-02":{"fajr":312,"sunrise":397,"dhuhr":684,"asr":822,"maghrib":969,"isha":1079,"src":"f"},"11-03":{"fajr":314,"sunrise":399,"dhuhr":684,"asr":820,"maghrib":968,"isha":1077,"src":"f"},"11-04":{"fajr":316,"sunrise":401,"dhuhr":684,"asr":819,"maghrib":966,"isha":1076,"src":"f"},"11-05":{"fajr":317,"sunrise":402,"dhuhr":684,"asr":817,"maghrib":964,"isha":1074,"src":"f"},"11-06":{"fajr":319,"sunrise":404,"dhuhr":684,"asr":817,"maghrib":962,"isha":1073,"src":"f"},"11-07":{"fajr":321,"sunrise":406,"dhuhr":684,"asr":816,"maghrib":961,"isha":1070,"src":"f"},"11-08":{"fajr":323,"sunrise":408,"dhuhr":684,"asr":815,"maghrib":959,"isha":1068,"src":"f"},"11-09":{"fajr":325,"sunrise":410,"dhuhr":684,"asr":814,"maghrib":958,"isha":1066,"src":"f"},"11-10":{"fajr":326,"sunrise":411,"dhuhr":684,"asr":814,"maghrib":956,"isha":1064,"src":"f"},"11-11":{"fajr":328,"sunrise":413,"dhuhr":684,"asr":812,"maghrib":954,"isha":1063,"src":"f"},"11-12":{"fajr":330,"sunrise":415,"dhuhr":684,"asr":810,"maghrib":953,"isha":1061,"src":"f"},"11-13":{"fajr":332,"sunrise":417,"dhuhr":684,"asr":809,"maghrib":951,"isha":1059,"src":"f"},"11-14":{"fajr":333,"sunrise":418,"dhuhr":684,"asr":808,"maghrib":950,"isha":1059,"src":"f"},"11-15":{"fajr":335,"sunrise":420,"dhuhr":685,"asr":808,"maghrib":949,"isha":1058,"src":"f"},"11-16":{"fajr":337,"sunrise":422,"dhuhr":685,"asr":807,"maghrib":947,"isha":1056,"src":"f"},"11-17":{"fajr":339,"sunrise":424,"dhuhr":685,"asr":806,"maghrib":946,"isha":1054,"src":"f"},"11-18":{"fajr":340,"sunrise":425,"dhuhr":685,"asr":805,"maghrib":945,"isha":1052,"src":"f"},"11-19":{"fajr":342,"sunrise":427,"dhuhr":686,"asr":804,"maghrib":943,"isha":1050,"src":"f"},"11-20":{"fajr":344,"sunrise":429,"dhuhr":686,"asr":803,"maghrib":942,"isha":1049,"src":"f"},"11-21":{"fajr":345,"sunrise":430,"dhuhr":686,"asr":802,"maghrib":941,"isha":1048,"src":"f"},"11-22":{"fajr":347,"sunrise":432,"dhuhr":686,"asr":801,"maghrib":940,"isha":1046,"src":"f"},"11-23":{"fajr":349,"sunrise":434,"dhuhr":687,"asr":800,"maghrib":939,"isha":1044,"src":"f"},"11-24":{"fajr":350,"sunrise":435,"dhuhr":687,"asr":799,"maghrib":938,"isha":1044,"src":"f"},"11-25":{"fajr":352,"sunrise":437,"dhuhr":687,"asr":799,"maghrib":937,"isha":1042,"src":"f"},"11-26":{"fajr":353,"sunrise":438,"dhuhr":688,"asr":798,"maghrib":936,"isha":1041,"src":"f"},"11-27":{"fajr":355,"sunrise":440,"dhuhr":688,"asr":798,"maghrib":935,"isha":1040,"src":"f"},"11-28":{"fajr":356,"sunrise":441,"dhuhr":688,"asr":797,"maghrib":934,"isha":1039,"src":"f"},"11-29":{"fajr":358,"sunrise":443,"dhuhr":689,"asr":797,"maghrib":933,"isha":1039,"src":"f"},"11-30":{"fajr":359,"sunrise":444,"dhuhr":689,"asr":796,"maghrib":933,"isha":1037,"src":"f"},"12-01":{"fajr":361,"sunrise":446,"dhuhr":689,"asr":796,"maghrib":932,"isha":1036,"src":"f"},"12-02":{"fajr":362,"sunrise":447,"dhuhr":689,"asr":796,"maghrib":931,"isha":1036,"src":"f"},"12-03":{"fajr":364,"sunrise":449,"dhuhr":690,"asr":795,"maghrib":931,"isha":1035,"src":"f"},"12-04":{"fajr":365,"sunrise":450,"dhuhr":690,"asr":795,"maghrib":930,"isha":1035,"src":"f"},"12-05":{"fajr":366,"sunrise":451,"dhuhr":690,"asr":794,"maghrib":930,"isha":1035,"src":"f"},"12-06":{"fajr":367,"sunrise":452,"dhuhr":691,"asr":794,"maghrib":930,"isha":1034,"src":"f"},"12-07":{"fajr":369,"sunrise":454,"dhuhr":691,"asr":794,"maghrib":929,"isha":1034,"src":"f"},"12-08":{"fajr":370,"sunrise":455,"dhuhr":692,"asr":794,"maghrib":929,"isha":1034,"src":"f"},"12-09":{"fajr":371,"sunrise":456,"dhuhr":692,"asr":794,"maghrib":929,"isha":1034,"src":"f"},"12-10":{"fajr":372,"sunrise":457,"dhuhr":693,"asr":793,"maghrib":928,"isha":1034,"src":"f"},"12-11":{"fajr":373,"sunrise":458,"dhuhr":693,"asr":793,"maghrib":928,"isha":1034,"src":"f"},"12-12":{"fajr":374,"sunrise":459,"dhuhr":693,"asr":793,"maghrib":928,"isha":1035,"src":"f"},"12-13":{"fajr":375,"sunrise":460,"dhuhr":694,"asr":795,"maghrib":928,"isha":1035,"src":"f"},"12-14":{"fajr":376,"sunrise":461,"dhuhr":694,"asr":796,"maghrib":928,"isha":1035,"src":"f"},"12-15":{"fajr":377,"sunrise":462,"dhuhr":695,"asr":796,"maghrib":929,"isha":1035,"src":"f"},"12-16":{"fajr":378,"sunrise":463,"dhuhr":695,"asr":796,"maghrib":929,"isha":1035,"src":"f"},"12-17":{"fajr":378,"sunrise":463,"dhuhr":695,"asr":798,"maghrib":929,"isha":1035,"src":"f"},"12-18":{"fajr":379,"sunrise":464,"dhuhr":696,"asr":798,"maghrib":929,"isha":1036,"src":"f"},"12-19":{"fajr":380,"sunrise":465,"dhuhr":696,"asr":799,"maghrib":930,"isha":1036,"src":"f"},"12-20":{"fajr":380,"sunrise":465,"dhuhr":697,"asr":799,"maghrib":930,"isha":1036,"src":"f"},"12-21":{"fajr":381,"sunrise":466,"dhuhr":697,"asr":799,"maghrib":930,"isha":1037,"src":"f"},"12-22":{"fajr":381,"sunrise":466,"dhuhr":698,"asr":800,"maghrib":931,"isha":1037,"src":"f"},"12-23":{"fajr":382,"sunrise":467,"dhuhr":698,"asr":801,"maghrib":932,"isha":1038,"src":"f"},"12-24":{"fajr":382,"sunrise":467,"dhuhr":699,"asr":801,"maghrib":932,"isha":1039,"src":"f"},"12-25":{"fajr":383,"sunrise":468,"dhuhr":700,"asr":802,"maghrib":933,"isha":1040,"src":"f"},"12-26":{"fajr":383,"sunrise":468,"dhuhr":700,"asr":803,"maghrib":934,"isha":1040,"src":"f"},"12-27":{"fajr":383,"sunrise":468,"dhuhr":701,"asr":804,"maghrib":934,"isha":1041,"src":"f"},"12-28":{"fajr":383,"sunrise":468,"dhuhr":701,"asr":804,"maghrib":935,"isha":1042,"src":"f"},"12-29":{"fajr":383,"sunrise":468,"dhuhr":702,"asr":804,"maghrib":936,"isha":1044,"src":"f"},"12-30":{"fajr":383,"sunrise":468,"dhuhr":702,"asr":805,"maghrib":937,"isha":1045,"src":"f"},"12-31":{"fajr":383,"sunrise":468,"dhuhr":703,"asr":806,"maghrib":938,"isha":1046,"src":"f"}}}</script>
-
-<noscript><div class="msg">Aplica&#539;ia are nevoie de JavaScript.</div></noscript>
+<script type="application/json" id="seed">{"place":"Tilburg, Netherlands","mosque":"El-Feth Moskee","timeZone":"Europe/Amsterdam","sourceYear":2026,"generated":"2026-09-22","note":"minutes after 00:00 UTC on the given calendar day; the app adds them to UTC midnight and renders the instant in Europe/Amsterdam, so the clock times stay correct in any year whatever date daylight saving moves to. src: f = mosque feed (el-feth.nl), p = printed mosque calendar (wins over the feed), m = mawaqit, c = interpolated. Generated by data/build-times.js — do not edit by hand.","days":{"01-01":{"fajr":383,"sunrise":468,"dhuhr":703,"asr":808,"maghrib":939,"isha":1049,"src":"f"},"01-02":{"fajr":383,"sunrise":468,"dhuhr":703,"asr":809,"maghrib":941,"isha":1051,"src":"f"},"01-03":{"fajr":383,"sunrise":468,"dhuhr":704,"asr":810,"maghrib":942,"isha":1052,"src":"f"},"01-04":{"fajr":382,"sunrise":467,"dhuhr":704,"asr":812,"maghrib":943,"isha":1052,"src":"f"},"01-05":{"fajr":382,"sunrise":467,"dhuhr":705,"asr":813,"maghrib":944,"isha":1053,"src":"f"},"01-06":{"fajr":382,"sunrise":467,"dhuhr":706,"asr":814,"maghrib":945,"isha":1055,"src":"f"},"01-07":{"fajr":381,"sunrise":466,"dhuhr":707,"asr":815,"maghrib":947,"isha":1057,"src":"f"},"01-08":{"fajr":381,"sunrise":466,"dhuhr":707,"asr":816,"maghrib":948,"isha":1058,"src":"f"},"01-09":{"fajr":380,"sunrise":465,"dhuhr":707,"asr":817,"maghrib":950,"isha":1058,"src":"f"},"01-10":{"fajr":380,"sunrise":465,"dhuhr":707,"asr":819,"maghrib":951,"isha":1059,"src":"f"},"01-11":{"fajr":379,"sunrise":464,"dhuhr":708,"asr":821,"maghrib":952,"isha":1061,"src":"f"},"01-12":{"fajr":378,"sunrise":463,"dhuhr":708,"asr":822,"maghrib":954,"isha":1062,"src":"f"},"01-13":{"fajr":378,"sunrise":463,"dhuhr":708,"asr":823,"maghrib":955,"isha":1063,"src":"f"},"01-14":{"fajr":377,"sunrise":462,"dhuhr":708,"asr":824,"maghrib":957,"isha":1064,"src":"f"},"01-15":{"fajr":376,"sunrise":461,"dhuhr":709,"asr":826,"maghrib":959,"isha":1066,"src":"f"},"01-16":{"fajr":375,"sunrise":460,"dhuhr":709,"asr":827,"maghrib":960,"isha":1067,"src":"f"},"01-17":{"fajr":374,"sunrise":459,"dhuhr":710,"asr":828,"maghrib":962,"isha":1069,"src":"f"},"01-18":{"fajr":373,"sunrise":458,"dhuhr":710,"asr":829,"maghrib":963,"isha":1071,"src":"f"},"01-19":{"fajr":372,"sunrise":457,"dhuhr":710,"asr":831,"maghrib":965,"isha":1073,"src":"f"},"01-20":{"fajr":371,"sunrise":456,"dhuhr":710,"asr":833,"maghrib":967,"isha":1075,"src":"f"},"01-21":{"fajr":370,"sunrise":455,"dhuhr":711,"asr":834,"maghrib":968,"isha":1077,"src":"f"},"01-22":{"fajr":369,"sunrise":454,"dhuhr":711,"asr":836,"maghrib":970,"isha":1078,"src":"f"},"01-23":{"fajr":367,"sunrise":452,"dhuhr":711,"asr":837,"maghrib":972,"isha":1079,"src":"f"},"01-24":{"fajr":366,"sunrise":451,"dhuhr":712,"asr":838,"maghrib":974,"isha":1080,"src":"f"},"01-25":{"fajr":365,"sunrise":450,"dhuhr":712,"asr":839,"maghrib":975,"isha":1081,"src":"f"},"01-26":{"fajr":363,"sunrise":448,"dhuhr":712,"asr":841,"maghrib":977,"isha":1082,"src":"f"},"01-27":{"fajr":362,"sunrise":447,"dhuhr":713,"asr":840,"maghrib":979,"isha":1083,"src":"f"},"01-28":{"fajr":361,"sunrise":446,"dhuhr":713,"asr":843,"maghrib":981,"isha":1083,"src":"f"},"01-29":{"fajr":359,"sunrise":444,"dhuhr":713,"asr":845,"maghrib":983,"isha":1084,"src":"f"},"01-30":{"fajr":358,"sunrise":443,"dhuhr":713,"asr":846,"maghrib":985,"isha":1085,"src":"f"},"01-31":{"fajr":356,"sunrise":441,"dhuhr":713,"asr":847,"maghrib":986,"isha":1085,"src":"f"},"02-01":{"fajr":355,"sunrise":440,"dhuhr":714,"asr":849,"maghrib":988,"isha":1087,"src":"f"},"02-02":{"fajr":353,"sunrise":438,"dhuhr":714,"asr":850,"maghrib":990,"isha":1089,"src":"f"},"02-03":{"fajr":351,"sunrise":436,"dhuhr":714,"asr":851,"maghrib":992,"isha":1091,"src":"f"},"02-04":{"fajr":350,"sunrise":435,"dhuhr":714,"asr":853,"maghrib":994,"isha":1092,"src":"f"},"02-05":{"fajr":348,"sunrise":433,"dhuhr":714,"asr":855,"maghrib":996,"isha":1094,"src":"f"},"02-06":{"fajr":346,"sunrise":431,"dhuhr":714,"asr":857,"maghrib":998,"isha":1096,"src":"f"},"02-07":{"fajr":345,"sunrise":430,"dhuhr":714,"asr":858,"maghrib":999,"isha":1098,"src":"f"},"02-08":{"fajr":343,"sunrise":428,"dhuhr":714,"asr":860,"maghrib":1001,"isha":1099,"src":"f"},"02-09":{"fajr":341,"sunrise":426,"dhuhr":714,"asr":862,"maghrib":1003,"isha":1101,"src":"f"},"02-10":{"fajr":339,"sunrise":424,"dhuhr":714,"asr":863,"maghrib":1005,"isha":1103,"src":"f"},"02-11":{"fajr":337,"sunrise":422,"dhuhr":714,"asr":864,"maghrib":1007,"isha":1105,"src":"f"},"02-12":{"fajr":335,"sunrise":420,"dhuhr":714,"asr":866,"maghrib":1009,"isha":1106,"src":"f"},"02-13":{"fajr":333,"sunrise":418,"dhuhr":714,"asr":867,"maghrib":1011,"isha":1107,"src":"f"},"02-14":{"fajr":332,"sunrise":417,"dhuhr":714,"asr":869,"maghrib":1012,"isha":1109,"src":"f"},"02-15":{"fajr":330,"sunrise":415,"dhuhr":714,"asr":870,"maghrib":1014,"isha":1111,"src":"f"},"02-16":{"fajr":328,"sunrise":413,"dhuhr":714,"asr":871,"maghrib":1016,"isha":1112,"src":"f"},"02-17":{"fajr":326,"sunrise":411,"dhuhr":713,"asr":872,"maghrib":1018,"isha":1114,"src":"f"},"02-18":{"fajr":324,"sunrise":409,"dhuhr":713,"asr":874,"maghrib":1020,"isha":1116,"src":"f"},"02-19":{"fajr":322,"sunrise":407,"dhuhr":713,"asr":876,"maghrib":1022,"isha":1117,"src":"f"},"02-20":{"fajr":320,"sunrise":405,"dhuhr":713,"asr":877,"maghrib":1024,"isha":1118,"src":"f"},"02-21":{"fajr":318,"sunrise":403,"dhuhr":713,"asr":879,"maghrib":1025,"isha":1120,"src":"f"},"02-22":{"fajr":315,"sunrise":400,"dhuhr":713,"asr":880,"maghrib":1027,"isha":1121,"src":"f"},"02-23":{"fajr":313,"sunrise":398,"dhuhr":713,"asr":881,"maghrib":1029,"isha":1122,"src":"f"},"02-24":{"fajr":311,"sunrise":396,"dhuhr":713,"asr":882,"maghrib":1031,"isha":1124,"src":"f"},"02-25":{"fajr":309,"sunrise":394,"dhuhr":713,"asr":884,"maghrib":1033,"isha":1126,"src":"f"},"02-26":{"fajr":307,"sunrise":392,"dhuhr":713,"asr":886,"maghrib":1035,"isha":1128,"src":"f"},"02-27":{"fajr":305,"sunrise":390,"dhuhr":713,"asr":887,"maghrib":1036,"isha":1130,"src":"f"},"02-28":{"fajr":303,"sunrise":388,"dhuhr":713,"asr":889,"maghrib":1038,"isha":1131,"src":"f"},"03-01":{"fajr":300,"sunrise":385,"dhuhr":712,"asr":890,"maghrib":1040,"isha":1132,"src":"f"},"03-02":{"fajr":298,"sunrise":383,"dhuhr":712,"asr":891,"maghrib":1042,"isha":1132,"src":"f"},"03-03":{"fajr":296,"sunrise":381,"dhuhr":712,"asr":892,"maghrib":1044,"isha":1133,"src":"f"},"03-04":{"fajr":294,"sunrise":379,"dhuhr":712,"asr":894,"maghrib":1045,"isha":1134,"src":"f"},"03-05":{"fajr":292,"sunrise":377,"dhuhr":712,"asr":895,"maghrib":1047,"isha":1136,"src":"f"},"03-06":{"fajr":289,"sunrise":374,"dhuhr":712,"asr":896,"maghrib":1049,"isha":1138,"src":"f"},"03-07":{"fajr":287,"sunrise":372,"dhuhr":711,"asr":897,"maghrib":1051,"isha":1140,"src":"f"},"03-08":{"fajr":285,"sunrise":370,"dhuhr":711,"asr":899,"maghrib":1052,"isha":1142,"src":"f"},"03-09":{"fajr":283,"sunrise":368,"dhuhr":711,"asr":900,"maghrib":1054,"isha":1143,"src":"f"},"03-10":{"fajr":280,"sunrise":365,"dhuhr":710,"asr":901,"maghrib":1056,"isha":1144,"src":"f"},"03-11":{"fajr":278,"sunrise":363,"dhuhr":710,"asr":902,"maghrib":1058,"isha":1146,"src":"f"},"03-12":{"fajr":276,"sunrise":361,"dhuhr":710,"asr":903,"maghrib":1060,"isha":1148,"src":"f"},"03-13":{"fajr":273,"sunrise":358,"dhuhr":709,"asr":904,"maghrib":1061,"isha":1150,"src":"f"},"03-14":{"fajr":271,"sunrise":356,"dhuhr":709,"asr":905,"maghrib":1063,"isha":1151,"src":"f"},"03-15":{"fajr":269,"sunrise":354,"dhuhr":708,"asr":907,"maghrib":1065,"isha":1153,"src":"f"},"03-16":{"fajr":267,"sunrise":352,"dhuhr":708,"asr":908,"maghrib":1067,"isha":1155,"src":"f"},"03-17":{"fajr":264,"sunrise":349,"dhuhr":708,"asr":909,"maghrib":1068,"isha":1156,"src":"f"},"03-18":{"fajr":262,"sunrise":347,"dhuhr":708,"asr":910,"maghrib":1070,"isha":1159,"src":"f"},"03-19":{"fajr":260,"sunrise":345,"dhuhr":707,"asr":912,"maghrib":1072,"isha":1161,"src":"f"},"03-20":{"fajr":257,"sunrise":342,"dhuhr":707,"asr":913,"maghrib":1073,"isha":1163,"src":"f"},"03-21":{"fajr":255,"sunrise":340,"dhuhr":707,"asr":914,"maghrib":1075,"isha":1166,"src":"f"},"03-22":{"fajr":253,"sunrise":338,"dhuhr":707,"asr":915,"maghrib":1077,"isha":1168,"src":"f"},"03-23":{"fajr":250,"sunrise":335,"dhuhr":706,"asr":916,"maghrib":1079,"isha":1170,"src":"f"},"03-24":{"fajr":248,"sunrise":333,"dhuhr":706,"asr":918,"maghrib":1080,"isha":1173,"src":"f"},"03-25":{"fajr":246,"sunrise":331,"dhuhr":706,"asr":919,"maghrib":1082,"isha":1175,"src":"f"},"03-26":{"fajr":243,"sunrise":328,"dhuhr":706,"asr":920,"maghrib":1084,"isha":1176,"src":"f"},"03-27":{"fajr":241,"sunrise":326,"dhuhr":705,"asr":921,"maghrib":1085,"isha":1178,"src":"f"},"03-28":{"fajr":239,"sunrise":324,"dhuhr":705,"asr":921,"maghrib":1087,"isha":1180,"src":"f"},"03-29":{"fajr":236,"sunrise":321,"dhuhr":705,"asr":922,"maghrib":1089,"isha":1182,"src":"f"},"03-30":{"fajr":234,"sunrise":319,"dhuhr":705,"asr":923,"maghrib":1091,"isha":1184,"src":"f"},"03-31":{"fajr":232,"sunrise":317,"dhuhr":704,"asr":925,"maghrib":1092,"isha":1186,"src":"f"},"04-01":{"fajr":230,"sunrise":315,"dhuhr":704,"asr":926,"maghrib":1094,"isha":1188,"src":"f"},"04-02":{"fajr":227,"sunrise":312,"dhuhr":704,"asr":926,"maghrib":1096,"isha":1189,"src":"f"},"04-03":{"fajr":225,"sunrise":310,"dhuhr":703,"asr":927,"maghrib":1097,"isha":1190,"src":"f"},"04-04":{"fajr":223,"sunrise":308,"dhuhr":703,"asr":928,"maghrib":1099,"isha":1191,"src":"f"},"04-05":{"fajr":220,"sunrise":305,"dhuhr":703,"asr":928,"maghrib":1101,"isha":1193,"src":"f"},"04-06":{"fajr":218,"sunrise":303,"dhuhr":702,"asr":929,"maghrib":1103,"isha":1194,"src":"f"},"04-07":{"fajr":216,"sunrise":301,"dhuhr":702,"asr":930,"maghrib":1104,"isha":1196,"src":"f"},"04-08":{"fajr":214,"sunrise":299,"dhuhr":702,"asr":931,"maghrib":1106,"isha":1197,"src":"f"},"04-09":{"fajr":211,"sunrise":296,"dhuhr":701,"asr":931,"maghrib":1108,"isha":1199,"src":"f"},"04-10":{"fajr":209,"sunrise":294,"dhuhr":701,"asr":932,"maghrib":1109,"isha":1200,"src":"f"},"04-11":{"fajr":207,"sunrise":292,"dhuhr":701,"asr":932,"maghrib":1111,"isha":1201,"src":"f"},"04-12":{"fajr":205,"sunrise":290,"dhuhr":701,"asr":933,"maghrib":1113,"isha":1202,"src":"f"},"04-13":{"fajr":202,"sunrise":287,"dhuhr":700,"asr":934,"maghrib":1115,"isha":1204,"src":"f"},"04-14":{"fajr":200,"sunrise":285,"dhuhr":700,"asr":935,"maghrib":1116,"isha":1206,"src":"f"},"04-15":{"fajr":198,"sunrise":283,"dhuhr":700,"asr":936,"maghrib":1118,"isha":1208,"src":"f"},"04-16":{"fajr":196,"sunrise":281,"dhuhr":700,"asr":936,"maghrib":1120,"isha":1209,"src":"f"},"04-17":{"fajr":194,"sunrise":279,"dhuhr":699,"asr":937,"maghrib":1121,"isha":1210,"src":"f"},"04-18":{"fajr":192,"sunrise":277,"dhuhr":699,"asr":937,"maghrib":1123,"isha":1212,"src":"f"},"04-19":{"fajr":189,"sunrise":274,"dhuhr":699,"asr":938,"maghrib":1125,"isha":1214,"src":"f"},"04-20":{"fajr":187,"sunrise":272,"dhuhr":699,"asr":939,"maghrib":1127,"isha":1215,"src":"f"},"04-21":{"fajr":185,"sunrise":270,"dhuhr":699,"asr":940,"maghrib":1128,"isha":1216,"src":"f"},"04-22":{"fajr":183,"sunrise":268,"dhuhr":698,"asr":941,"maghrib":1130,"isha":1218,"src":"f"},"04-23":{"fajr":181,"sunrise":266,"dhuhr":698,"asr":941,"maghrib":1132,"isha":1220,"src":"f"},"04-24":{"fajr":179,"sunrise":264,"dhuhr":698,"asr":942,"maghrib":1133,"isha":1221,"src":"f"},"04-25":{"fajr":177,"sunrise":262,"dhuhr":698,"asr":943,"maghrib":1135,"isha":1223,"src":"f"},"04-26":{"fajr":175,"sunrise":260,"dhuhr":698,"asr":944,"maghrib":1137,"isha":1225,"src":"f"},"04-27":{"fajr":173,"sunrise":258,"dhuhr":697,"asr":944,"maghrib":1138,"isha":1227,"src":"f"},"04-28":{"fajr":171,"sunrise":256,"dhuhr":697,"asr":945,"maghrib":1140,"isha":1229,"src":"f"},"04-29":{"fajr":169,"sunrise":254,"dhuhr":697,"asr":946,"maghrib":1142,"isha":1230,"src":"f"},"04-30":{"fajr":167,"sunrise":252,"dhuhr":697,"asr":947,"maghrib":1143,"isha":1232,"src":"f"},"05-01":{"fajr":165,"sunrise":250,"dhuhr":697,"asr":948,"maghrib":1145,"isha":1234,"src":"f"},"05-02":{"fajr":163,"sunrise":248,"dhuhr":697,"asr":948,"maghrib":1147,"isha":1235,"src":"f"},"05-03":{"fajr":161,"sunrise":246,"dhuhr":697,"asr":948,"maghrib":1148,"isha":1236,"src":"f"},"05-04":{"fajr":159,"sunrise":244,"dhuhr":697,"asr":948,"maghrib":1150,"isha":1238,"src":"f"},"05-05":{"fajr":158,"sunrise":243,"dhuhr":697,"asr":949,"maghrib":1152,"isha":1239,"src":"f"},"05-06":{"fajr":156,"sunrise":241,"dhuhr":697,"asr":949,"maghrib":1153,"isha":1241,"src":"f"},"05-07":{"fajr":154,"sunrise":239,"dhuhr":697,"asr":949,"maghrib":1155,"isha":1243,"src":"f"},"05-08":{"fajr":152,"sunrise":237,"dhuhr":696,"asr":950,"maghrib":1157,"isha":1244,"src":"f"},"05-09":{"fajr":151,"sunrise":236,"dhuhr":696,"asr":950,"maghrib":1158,"isha":1246,"src":"f"},"05-10":{"fajr":149,"sunrise":234,"dhuhr":696,"asr":950,"maghrib":1160,"isha":1247,"src":"f"},"05-11":{"fajr":147,"sunrise":232,"dhuhr":696,"asr":951,"maghrib":1162,"isha":1248,"src":"f"},"05-12":{"fajr":146,"sunrise":231,"dhuhr":696,"asr":951,"maghrib":1163,"isha":1250,"src":"f"},"05-13":{"fajr":144,"sunrise":229,"dhuhr":696,"asr":951,"maghrib":1165,"isha":1251,"src":"f"},"05-14":{"fajr":142,"sunrise":227,"dhuhr":696,"asr":951,"maghrib":1166,"isha":1253,"src":"f"},"05-15":{"fajr":141,"sunrise":226,"dhuhr":696,"asr":952,"maghrib":1168,"isha":1255,"src":"f"},"05-16":{"fajr":139,"sunrise":224,"dhuhr":696,"asr":952,"maghrib":1169,"isha":1256,"src":"f"},"05-17":{"fajr":138,"sunrise":223,"dhuhr":696,"asr":953,"maghrib":1171,"isha":1258,"src":"f"},"05-18":{"fajr":137,"sunrise":222,"dhuhr":696,"asr":954,"maghrib":1172,"isha":1259,"src":"f"},"05-19":{"fajr":135,"sunrise":220,"dhuhr":696,"asr":955,"maghrib":1174,"isha":1261,"src":"f"},"05-20":{"fajr":134,"sunrise":219,"dhuhr":696,"asr":955,"maghrib":1175,"isha":1262,"src":"f"},"05-21":{"fajr":133,"sunrise":218,"dhuhr":697,"asr":956,"maghrib":1177,"isha":1263,"src":"f"},"05-22":{"fajr":131,"sunrise":216,"dhuhr":697,"asr":956,"maghrib":1178,"isha":1265,"src":"f"},"05-23":{"fajr":130,"sunrise":215,"dhuhr":697,"asr":956,"maghrib":1179,"isha":1266,"src":"f"},"05-24":{"fajr":129,"sunrise":214,"dhuhr":697,"asr":957,"maghrib":1181,"isha":1268,"src":"f"},"05-25":{"fajr":128,"sunrise":213,"dhuhr":697,"asr":957,"maghrib":1182,"isha":1269,"src":"f"},"05-26":{"fajr":127,"sunrise":212,"dhuhr":697,"asr":957,"maghrib":1183,"isha":1270,"src":"f"},"05-27":{"fajr":125,"sunrise":210,"dhuhr":697,"asr":958,"maghrib":1185,"isha":1272,"src":"f"},"05-28":{"fajr":124,"sunrise":209,"dhuhr":697,"asr":958,"maghrib":1186,"isha":1273,"src":"f"},"05-29":{"fajr":124,"sunrise":209,"dhuhr":697,"asr":958,"maghrib":1187,"isha":1274,"src":"f"},"05-30":{"fajr":123,"sunrise":208,"dhuhr":698,"asr":959,"maghrib":1188,"isha":1275,"src":"f"},"05-31":{"fajr":122,"sunrise":207,"dhuhr":698,"asr":959,"maghrib":1189,"isha":1277,"src":"f"},"06-01":{"fajr":121,"sunrise":206,"dhuhr":698,"asr":959,"maghrib":1191,"isha":1278,"src":"f"},"06-02":{"fajr":120,"sunrise":205,"dhuhr":698,"asr":959,"maghrib":1192,"isha":1278,"src":"f"},"06-03":{"fajr":119,"sunrise":204,"dhuhr":698,"asr":959,"maghrib":1193,"isha":1279,"src":"f"},"06-04":{"fajr":119,"sunrise":204,"dhuhr":698,"asr":959,"maghrib":1194,"isha":1280,"src":"f"},"06-05":{"fajr":118,"sunrise":203,"dhuhr":698,"asr":959,"maghrib":1195,"isha":1281,"src":"f"},"06-06":{"fajr":117,"sunrise":202,"dhuhr":699,"asr":960,"maghrib":1196,"isha":1282,"src":"f"},"06-07":{"fajr":117,"sunrise":202,"dhuhr":699,"asr":960,"maghrib":1196,"isha":1283,"src":"f"},"06-08":{"fajr":116,"sunrise":201,"dhuhr":699,"asr":961,"maghrib":1197,"isha":1284,"src":"f"},"06-09":{"fajr":116,"sunrise":201,"dhuhr":699,"asr":961,"maghrib":1198,"isha":1285,"src":"f"},"06-10":{"fajr":116,"sunrise":201,"dhuhr":699,"asr":961,"maghrib":1199,"isha":1286,"src":"f"},"06-11":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":962,"maghrib":1199,"isha":1286,"src":"f"},"06-12":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":962,"maghrib":1200,"isha":1287,"src":"f"},"06-13":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":962,"maghrib":1201,"isha":1288,"src":"f"},"06-14":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":963,"maghrib":1201,"isha":1288,"src":"f"},"06-15":{"fajr":114,"sunrise":199,"dhuhr":700,"asr":963,"maghrib":1202,"isha":1289,"src":"f"},"06-16":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":963,"maghrib":1202,"isha":1289,"src":"f"},"06-17":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":964,"maghrib":1203,"isha":1290,"src":"f"},"06-18":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":964,"maghrib":1203,"isha":1290,"src":"f"},"06-19":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":964,"maghrib":1203,"isha":1291,"src":"f"},"06-20":{"fajr":115,"sunrise":200,"dhuhr":701,"asr":964,"maghrib":1204,"isha":1291,"src":"f"},"06-21":{"fajr":115,"sunrise":200,"dhuhr":701,"asr":965,"maghrib":1204,"isha":1291,"src":"f"},"06-22":{"fajr":115,"sunrise":200,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1291,"src":"f"},"06-23":{"fajr":115,"sunrise":200,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-24":{"fajr":116,"sunrise":201,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-25":{"fajr":116,"sunrise":201,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-26":{"fajr":117,"sunrise":202,"dhuhr":703,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-27":{"fajr":117,"sunrise":202,"dhuhr":703,"asr":966,"maghrib":1204,"isha":1292,"src":"f"},"06-28":{"fajr":118,"sunrise":203,"dhuhr":703,"asr":966,"maghrib":1204,"isha":1291,"src":"f"},"06-29":{"fajr":118,"sunrise":203,"dhuhr":703,"asr":966,"maghrib":1204,"isha":1291,"src":"f"},"06-30":{"fajr":119,"sunrise":204,"dhuhr":704,"asr":966,"maghrib":1203,"isha":1291,"src":"f"},"07-01":{"fajr":120,"sunrise":205,"dhuhr":704,"asr":966,"maghrib":1203,"isha":1291,"src":"f"},"07-02":{"fajr":120,"sunrise":205,"dhuhr":704,"asr":966,"maghrib":1203,"isha":1291,"src":"f"},"07-03":{"fajr":121,"sunrise":206,"dhuhr":704,"asr":966,"maghrib":1202,"isha":1291,"src":"f"},"07-04":{"fajr":122,"sunrise":207,"dhuhr":704,"asr":966,"maghrib":1202,"isha":1291,"src":"f"},"07-05":{"fajr":123,"sunrise":208,"dhuhr":704,"asr":966,"maghrib":1201,"isha":1291,"src":"f"},"07-06":{"fajr":124,"sunrise":209,"dhuhr":704,"asr":966,"maghrib":1201,"isha":1290,"src":"f"},"07-07":{"fajr":125,"sunrise":210,"dhuhr":704,"asr":966,"maghrib":1200,"isha":1290,"src":"f"},"07-08":{"fajr":125,"sunrise":210,"dhuhr":705,"asr":966,"maghrib":1199,"isha":1289,"src":"f"},"07-09":{"fajr":126,"sunrise":211,"dhuhr":705,"asr":966,"maghrib":1199,"isha":1289,"src":"f"},"07-10":{"fajr":128,"sunrise":213,"dhuhr":705,"asr":966,"maghrib":1198,"isha":1288,"src":"f"},"07-11":{"fajr":129,"sunrise":214,"dhuhr":705,"asr":965,"maghrib":1197,"isha":1288,"src":"f"},"07-12":{"fajr":130,"sunrise":215,"dhuhr":705,"asr":965,"maghrib":1196,"isha":1287,"src":"f"},"07-13":{"fajr":131,"sunrise":216,"dhuhr":705,"asr":965,"maghrib":1195,"isha":1286,"src":"f"},"07-14":{"fajr":132,"sunrise":217,"dhuhr":706,"asr":965,"maghrib":1194,"isha":1285,"src":"f"},"07-15":{"fajr":133,"sunrise":218,"dhuhr":706,"asr":965,"maghrib":1193,"isha":1285,"src":"f"},"07-16":{"fajr":134,"sunrise":219,"dhuhr":706,"asr":964,"maghrib":1192,"isha":1284,"src":"f"},"07-17":{"fajr":136,"sunrise":221,"dhuhr":706,"asr":964,"maghrib":1191,"isha":1283,"src":"f"},"07-18":{"fajr":137,"sunrise":222,"dhuhr":706,"asr":964,"maghrib":1190,"isha":1282,"src":"f"},"07-19":{"fajr":138,"sunrise":223,"dhuhr":706,"asr":963,"maghrib":1189,"isha":1281,"src":"f"},"07-20":{"fajr":140,"sunrise":225,"dhuhr":706,"asr":963,"maghrib":1187,"isha":1279,"src":"f"},"07-21":{"fajr":141,"sunrise":226,"dhuhr":706,"asr":963,"maghrib":1186,"isha":1277,"src":"f"},"07-22":{"fajr":142,"sunrise":227,"dhuhr":707,"asr":962,"maghrib":1185,"isha":1276,"src":"f"},"07-23":{"fajr":144,"sunrise":229,"dhuhr":707,"asr":962,"maghrib":1183,"isha":1275,"src":"f"},"07-24":{"fajr":145,"sunrise":230,"dhuhr":707,"asr":961,"maghrib":1182,"isha":1273,"src":"f"},"07-25":{"fajr":147,"sunrise":232,"dhuhr":707,"asr":961,"maghrib":1181,"isha":1272,"src":"f"},"07-26":{"fajr":148,"sunrise":233,"dhuhr":707,"asr":960,"maghrib":1179,"isha":1271,"src":"f"},"07-27":{"fajr":150,"sunrise":235,"dhuhr":707,"asr":960,"maghrib":1178,"isha":1269,"src":"f"},"07-28":{"fajr":151,"sunrise":236,"dhuhr":707,"asr":959,"maghrib":1176,"isha":1268,"src":"f"},"07-29":{"fajr":153,"sunrise":238,"dhuhr":707,"asr":959,"maghrib":1174,"isha":1266,"src":"f"},"07-30":{"fajr":154,"sunrise":239,"dhuhr":707,"asr":958,"maghrib":1173,"isha":1265,"src":"f"},"07-31":{"fajr":156,"sunrise":241,"dhuhr":706,"asr":957,"maghrib":1171,"isha":1263,"src":"f"},"08-01":{"fajr":157,"sunrise":242,"dhuhr":706,"asr":957,"maghrib":1170,"isha":1261,"src":"f"},"08-02":{"fajr":159,"sunrise":244,"dhuhr":704,"asr":956,"maghrib":1168,"isha":1260,"src":"f"},"08-03":{"fajr":160,"sunrise":245,"dhuhr":704,"asr":955,"maghrib":1166,"isha":1258,"src":"f"},"08-04":{"fajr":162,"sunrise":247,"dhuhr":704,"asr":954,"maghrib":1164,"isha":1257,"src":"f"},"08-05":{"fajr":163,"sunrise":248,"dhuhr":703,"asr":952,"maghrib":1163,"isha":1255,"src":"f"},"08-06":{"fajr":165,"sunrise":250,"dhuhr":703,"asr":950,"maghrib":1161,"isha":1253,"src":"f"},"08-07":{"fajr":166,"sunrise":251,"dhuhr":703,"asr":948,"maghrib":1159,"isha":1251,"src":"f"},"08-08":{"fajr":168,"sunrise":253,"dhuhr":703,"asr":946,"maghrib":1157,"isha":1249,"src":"f"},"08-09":{"fajr":170,"sunrise":255,"dhuhr":703,"asr":945,"maghrib":1155,"isha":1248,"src":"f"},"08-10":{"fajr":171,"sunrise":256,"dhuhr":703,"asr":944,"maghrib":1153,"isha":1246,"src":"f"},"08-11":{"fajr":173,"sunrise":258,"dhuhr":703,"asr":943,"maghrib":1151,"isha":1244,"src":"f"},"08-12":{"fajr":174,"sunrise":259,"dhuhr":702,"asr":942,"maghrib":1149,"isha":1242,"src":"f"},"08-13":{"fajr":176,"sunrise":261,"dhuhr":702,"asr":940,"maghrib":1147,"isha":1240,"src":"f"},"08-14":{"fajr":178,"sunrise":263,"dhuhr":702,"asr":939,"maghrib":1145,"isha":1238,"src":"f"},"08-15":{"fajr":179,"sunrise":264,"dhuhr":702,"asr":938,"maghrib":1143,"isha":1236,"src":"f"},"08-16":{"fajr":181,"sunrise":266,"dhuhr":702,"asr":937,"maghrib":1141,"isha":1234,"src":"f"},"08-17":{"fajr":183,"sunrise":268,"dhuhr":702,"asr":936,"maghrib":1139,"isha":1232,"src":"f"},"08-18":{"fajr":184,"sunrise":269,"dhuhr":702,"asr":935,"maghrib":1137,"isha":1230,"src":"f"},"08-19":{"fajr":186,"sunrise":271,"dhuhr":701,"asr":934,"maghrib":1135,"isha":1228,"src":"f"},"08-20":{"fajr":187,"sunrise":272,"dhuhr":701,"asr":932,"maghrib":1133,"isha":1226,"src":"f"},"08-21":{"fajr":189,"sunrise":274,"dhuhr":701,"asr":931,"maghrib":1131,"isha":1224,"src":"f"},"08-22":{"fajr":191,"sunrise":276,"dhuhr":701,"asr":931,"maghrib":1129,"isha":1222,"src":"f"},"08-23":{"fajr":192,"sunrise":277,"dhuhr":701,"asr":930,"maghrib":1127,"isha":1220,"src":"f"},"08-24":{"fajr":194,"sunrise":279,"dhuhr":701,"asr":929,"maghrib":1125,"isha":1218,"src":"f"},"08-25":{"fajr":196,"sunrise":281,"dhuhr":701,"asr":928,"maghrib":1122,"isha":1216,"src":"f"},"08-26":{"fajr":197,"sunrise":282,"dhuhr":700,"asr":927,"maghrib":1120,"isha":1213,"src":"f"},"08-27":{"fajr":199,"sunrise":284,"dhuhr":700,"asr":926,"maghrib":1118,"isha":1211,"src":"f"},"08-28":{"fajr":201,"sunrise":286,"dhuhr":700,"asr":924,"maghrib":1116,"isha":1209,"src":"f"},"08-29":{"fajr":202,"sunrise":287,"dhuhr":700,"asr":923,"maghrib":1113,"isha":1207,"src":"f"},"08-30":{"fajr":204,"sunrise":289,"dhuhr":700,"asr":922,"maghrib":1111,"isha":1205,"src":"f"},"08-31":{"fajr":205,"sunrise":290,"dhuhr":700,"asr":922,"maghrib":1109,"isha":1203,"src":"f"},"09-01":{"fajr":207,"sunrise":292,"dhuhr":700,"asr":921,"maghrib":1107,"isha":1201,"src":"p"},"09-02":{"fajr":209,"sunrise":294,"dhuhr":700,"asr":920,"maghrib":1104,"isha":1200,"src":"f"},"09-03":{"fajr":210,"sunrise":295,"dhuhr":700,"asr":920,"maghrib":1102,"isha":1197,"src":"f"},"09-04":{"fajr":212,"sunrise":297,"dhuhr":699,"asr":919,"maghrib":1100,"isha":1195,"src":"f"},"09-05":{"fajr":214,"sunrise":299,"dhuhr":699,"asr":917,"maghrib":1098,"isha":1193,"src":"f"},"09-06":{"fajr":215,"sunrise":300,"dhuhr":699,"asr":915,"maghrib":1095,"isha":1190,"src":"f"},"09-07":{"fajr":217,"sunrise":302,"dhuhr":698,"asr":913,"maghrib":1093,"isha":1188,"src":"f"},"09-08":{"fajr":218,"sunrise":303,"dhuhr":698,"asr":912,"maghrib":1091,"isha":1185,"src":"f"},"09-09":{"fajr":220,"sunrise":305,"dhuhr":698,"asr":910,"maghrib":1088,"isha":1182,"src":"f"},"09-10":{"fajr":222,"sunrise":307,"dhuhr":697,"asr":909,"maghrib":1086,"isha":1180,"src":"f"},"09-11":{"fajr":223,"sunrise":308,"dhuhr":697,"asr":908,"maghrib":1084,"isha":1178,"src":"f"},"09-12":{"fajr":225,"sunrise":310,"dhuhr":697,"asr":906,"maghrib":1081,"isha":1175,"src":"f"},"09-13":{"fajr":227,"sunrise":312,"dhuhr":696,"asr":904,"maghrib":1079,"isha":1172,"src":"f"},"09-14":{"fajr":228,"sunrise":313,"dhuhr":696,"asr":903,"maghrib":1077,"isha":1170,"src":"f"},"09-15":{"fajr":230,"sunrise":315,"dhuhr":695,"asr":901,"maghrib":1074,"isha":1168,"src":"f"},"09-16":{"fajr":231,"sunrise":316,"dhuhr":695,"asr":900,"maghrib":1072,"isha":1165,"src":"f"},"09-17":{"fajr":233,"sunrise":318,"dhuhr":695,"asr":898,"maghrib":1070,"isha":1162,"src":"f"},"09-18":{"fajr":235,"sunrise":320,"dhuhr":694,"asr":896,"maghrib":1067,"isha":1159,"src":"f"},"09-19":{"fajr":236,"sunrise":321,"dhuhr":694,"asr":895,"maghrib":1065,"isha":1156,"src":"f"},"09-20":{"fajr":238,"sunrise":323,"dhuhr":694,"asr":894,"maghrib":1063,"isha":1154,"src":"f"},"09-21":{"fajr":240,"sunrise":325,"dhuhr":693,"asr":892,"maghrib":1060,"isha":1152,"src":"f"},"09-22":{"fajr":241,"sunrise":326,"dhuhr":693,"asr":890,"maghrib":1058,"isha":1150,"src":"f"},"09-23":{"fajr":243,"sunrise":328,"dhuhr":693,"asr":888,"maghrib":1056,"isha":1148,"src":"f"},"09-24":{"fajr":245,"sunrise":330,"dhuhr":692,"asr":886,"maghrib":1053,"isha":1145,"src":"f"},"09-25":{"fajr":246,"sunrise":331,"dhuhr":692,"asr":885,"maghrib":1051,"isha":1143,"src":"f"},"09-26":{"fajr":248,"sunrise":333,"dhuhr":692,"asr":884,"maghrib":1049,"isha":1141,"src":"f"},"09-27":{"fajr":250,"sunrise":335,"dhuhr":691,"asr":882,"maghrib":1046,"isha":1140,"src":"f"},"09-28":{"fajr":251,"sunrise":336,"dhuhr":691,"asr":880,"maghrib":1044,"isha":1138,"src":"f"},"09-29":{"fajr":253,"sunrise":338,"dhuhr":691,"asr":879,"maghrib":1042,"isha":1136,"src":"f"},"09-30":{"fajr":255,"sunrise":340,"dhuhr":690,"asr":877,"maghrib":1039,"isha":1134,"src":"f"},"10-01":{"fajr":256,"sunrise":341,"dhuhr":690,"asr":876,"maghrib":1037,"isha":1132,"src":"f"},"10-02":{"fajr":258,"sunrise":343,"dhuhr":690,"asr":873,"maghrib":1035,"isha":1130,"src":"f"},"10-03":{"fajr":260,"sunrise":345,"dhuhr":689,"asr":871,"maghrib":1032,"isha":1128,"src":"f"},"10-04":{"fajr":261,"sunrise":346,"dhuhr":689,"asr":870,"maghrib":1030,"isha":1126,"src":"f"},"10-05":{"fajr":263,"sunrise":348,"dhuhr":689,"asr":868,"maghrib":1028,"isha":1124,"src":"f"},"10-06":{"fajr":265,"sunrise":350,"dhuhr":688,"asr":866,"maghrib":1026,"isha":1123,"src":"f"},"10-07":{"fajr":266,"sunrise":351,"dhuhr":688,"asr":865,"maghrib":1023,"isha":1122,"src":"f"},"10-08":{"fajr":268,"sunrise":353,"dhuhr":688,"asr":863,"maghrib":1021,"isha":1120,"src":"f"},"10-09":{"fajr":270,"sunrise":355,"dhuhr":688,"asr":861,"maghrib":1019,"isha":1118,"src":"f"},"10-10":{"fajr":271,"sunrise":356,"dhuhr":687,"asr":859,"maghrib":1017,"isha":1117,"src":"f"},"10-11":{"fajr":273,"sunrise":358,"dhuhr":687,"asr":858,"maghrib":1014,"isha":1115,"src":"f"},"10-12":{"fajr":275,"sunrise":360,"dhuhr":687,"asr":856,"maghrib":1012,"isha":1113,"src":"f"},"10-13":{"fajr":277,"sunrise":362,"dhuhr":687,"asr":855,"maghrib":1010,"isha":1111,"src":"f"},"10-14":{"fajr":278,"sunrise":363,"dhuhr":686,"asr":853,"maghrib":1008,"isha":1109,"src":"f"},"10-15":{"fajr":280,"sunrise":365,"dhuhr":686,"asr":852,"maghrib":1006,"isha":1107,"src":"f"},"10-16":{"fajr":282,"sunrise":367,"dhuhr":686,"asr":850,"maghrib":1003,"isha":1105,"src":"f"},"10-17":{"fajr":283,"sunrise":368,"dhuhr":686,"asr":848,"maghrib":1001,"isha":1103,"src":"f"},"10-18":{"fajr":285,"sunrise":370,"dhuhr":686,"asr":846,"maghrib":999,"isha":1102,"src":"f"},"10-19":{"fajr":287,"sunrise":372,"dhuhr":686,"asr":844,"maghrib":997,"isha":1101,"src":"f"},"10-20":{"fajr":289,"sunrise":374,"dhuhr":685,"asr":842,"maghrib":995,"isha":1099,"src":"f"},"10-21":{"fajr":290,"sunrise":375,"dhuhr":685,"asr":840,"maghrib":993,"isha":1096,"src":"f"},"10-22":{"fajr":292,"sunrise":377,"dhuhr":685,"asr":839,"maghrib":991,"isha":1095,"src":"f"},"10-23":{"fajr":294,"sunrise":379,"dhuhr":685,"asr":837,"maghrib":989,"isha":1093,"src":"f"},"10-24":{"fajr":296,"sunrise":381,"dhuhr":684,"asr":835,"maghrib":987,"isha":1092,"src":"f"},"10-25":{"fajr":298,"sunrise":383,"dhuhr":684,"asr":833,"maghrib":985,"isha":1090,"src":"f"},"10-26":{"fajr":299,"sunrise":384,"dhuhr":684,"asr":831,"maghrib":983,"isha":1088,"src":"f"},"10-27":{"fajr":301,"sunrise":386,"dhuhr":684,"asr":830,"maghrib":981,"isha":1086,"src":"f"},"10-28":{"fajr":303,"sunrise":388,"dhuhr":684,"asr":828,"maghrib":979,"isha":1084,"src":"f"},"10-29":{"fajr":305,"sunrise":390,"dhuhr":684,"asr":827,"maghrib":977,"isha":1083,"src":"f"},"10-30":{"fajr":307,"sunrise":392,"dhuhr":684,"asr":826,"maghrib":975,"isha":1081,"src":"f"},"10-31":{"fajr":308,"sunrise":393,"dhuhr":684,"asr":824,"maghrib":973,"isha":1080,"src":"f"},"11-01":{"fajr":310,"sunrise":395,"dhuhr":684,"asr":823,"maghrib":971,"isha":1079,"src":"f"},"11-02":{"fajr":312,"sunrise":397,"dhuhr":684,"asr":822,"maghrib":969,"isha":1079,"src":"f"},"11-03":{"fajr":314,"sunrise":399,"dhuhr":684,"asr":820,"maghrib":968,"isha":1077,"src":"f"},"11-04":{"fajr":316,"sunrise":401,"dhuhr":684,"asr":819,"maghrib":966,"isha":1076,"src":"f"},"11-05":{"fajr":317,"sunrise":402,"dhuhr":684,"asr":817,"maghrib":964,"isha":1074,"src":"f"},"11-06":{"fajr":319,"sunrise":404,"dhuhr":684,"asr":817,"maghrib":962,"isha":1073,"src":"f"},"11-07":{"fajr":321,"sunrise":406,"dhuhr":684,"asr":816,"maghrib":961,"isha":1070,"src":"f"},"11-08":{"fajr":323,"sunrise":408,"dhuhr":684,"asr":815,"maghrib":959,"isha":1068,"src":"f"},"11-09":{"fajr":325,"sunrise":410,"dhuhr":684,"asr":814,"maghrib":958,"isha":1066,"src":"f"},"11-10":{"fajr":326,"sunrise":411,"dhuhr":684,"asr":814,"maghrib":956,"isha":1064,"src":"f"},"11-11":{"fajr":328,"sunrise":413,"dhuhr":684,"asr":812,"maghrib":954,"isha":1063,"src":"f"},"11-12":{"fajr":330,"sunrise":415,"dhuhr":684,"asr":810,"maghrib":953,"isha":1061,"src":"f"},"11-13":{"fajr":332,"sunrise":417,"dhuhr":684,"asr":809,"maghrib":951,"isha":1059,"src":"f"},"11-14":{"fajr":333,"sunrise":418,"dhuhr":684,"asr":808,"maghrib":950,"isha":1059,"src":"f"},"11-15":{"fajr":335,"sunrise":420,"dhuhr":685,"asr":808,"maghrib":949,"isha":1058,"src":"f"},"11-16":{"fajr":337,"sunrise":422,"dhuhr":685,"asr":807,"maghrib":947,"isha":1056,"src":"f"},"11-17":{"fajr":339,"sunrise":424,"dhuhr":685,"asr":806,"maghrib":946,"isha":1054,"src":"f"},"11-18":{"fajr":340,"sunrise":425,"dhuhr":685,"asr":805,"maghrib":945,"isha":1052,"src":"f"},"11-19":{"fajr":342,"sunrise":427,"dhuhr":686,"asr":804,"maghrib":943,"isha":1050,"src":"f"},"11-20":{"fajr":344,"sunrise":429,"dhuhr":686,"asr":803,"maghrib":942,"isha":1049,"src":"f"},"11-21":{"fajr":345,"sunrise":430,"dhuhr":686,"asr":802,"maghrib":941,"isha":1048,"src":"f"},"11-22":{"fajr":347,"sunrise":432,"dhuhr":686,"asr":801,"maghrib":940,"isha":1046,"src":"f"},"11-23":{"fajr":349,"sunrise":434,"dhuhr":687,"asr":800,"maghrib":939,"isha":1044,"src":"f"},"11-24":{"fajr":350,"sunrise":435,"dhuhr":687,"asr":799,"maghrib":938,"isha":1044,"src":"f"},"11-25":{"fajr":352,"sunrise":437,"dhuhr":687,"asr":799,"maghrib":937,"isha":1042,"src":"f"},"11-26":{"fajr":353,"sunrise":438,"dhuhr":688,"asr":798,"maghrib":936,"isha":1041,"src":"f"},"11-27":{"fajr":355,"sunrise":440,"dhuhr":688,"asr":798,"maghrib":935,"isha":1040,"src":"f"},"11-28":{"fajr":356,"sunrise":441,"dhuhr":688,"asr":797,"maghrib":934,"isha":1039,"src":"f"},"11-29":{"fajr":358,"sunrise":443,"dhuhr":689,"asr":797,"maghrib":933,"isha":1039,"src":"f"},"11-30":{"fajr":359,"sunrise":444,"dhuhr":689,"asr":796,"maghrib":933,"isha":1037,"src":"f"},"12-01":{"fajr":361,"sunrise":446,"dhuhr":689,"asr":796,"maghrib":932,"isha":1036,"src":"f"},"12-02":{"fajr":362,"sunrise":447,"dhuhr":689,"asr":796,"maghrib":931,"isha":1036,"src":"f"},"12-03":{"fajr":364,"sunrise":449,"dhuhr":690,"asr":795,"maghrib":931,"isha":1035,"src":"f"},"12-04":{"fajr":365,"sunrise":450,"dhuhr":690,"asr":795,"maghrib":930,"isha":1035,"src":"f"},"12-05":{"fajr":366,"sunrise":451,"dhuhr":690,"asr":794,"maghrib":930,"isha":1035,"src":"f"},"12-06":{"fajr":367,"sunrise":452,"dhuhr":691,"asr":794,"maghrib":930,"isha":1034,"src":"f"},"12-07":{"fajr":369,"sunrise":454,"dhuhr":691,"asr":794,"maghrib":929,"isha":1034,"src":"f"},"12-08":{"fajr":370,"sunrise":455,"dhuhr":692,"asr":794,"maghrib":929,"isha":1034,"src":"f"},"12-09":{"fajr":371,"sunrise":456,"dhuhr":692,"asr":794,"maghrib":929,"isha":1034,"src":"f"},"12-10":{"fajr":372,"sunrise":457,"dhuhr":693,"asr":793,"maghrib":928,"isha":1034,"src":"f"},"12-11":{"fajr":373,"sunrise":458,"dhuhr":693,"asr":793,"maghrib":928,"isha":1034,"src":"f"},"12-12":{"fajr":374,"sunrise":459,"dhuhr":693,"asr":793,"maghrib":928,"isha":1035,"src":"f"},"12-13":{"fajr":375,"sunrise":460,"dhuhr":694,"asr":795,"maghrib":928,"isha":1035,"src":"f"},"12-14":{"fajr":376,"sunrise":461,"dhuhr":694,"asr":796,"maghrib":928,"isha":1035,"src":"f"},"12-15":{"fajr":377,"sunrise":462,"dhuhr":695,"asr":796,"maghrib":929,"isha":1035,"src":"f"},"12-16":{"fajr":378,"sunrise":463,"dhuhr":695,"asr":796,"maghrib":929,"isha":1035,"src":"f"},"12-17":{"fajr":378,"sunrise":463,"dhuhr":695,"asr":798,"maghrib":929,"isha":1035,"src":"f"},"12-18":{"fajr":379,"sunrise":464,"dhuhr":696,"asr":798,"maghrib":929,"isha":1036,"src":"f"},"12-19":{"fajr":380,"sunrise":465,"dhuhr":696,"asr":799,"maghrib":930,"isha":1036,"src":"f"},"12-20":{"fajr":380,"sunrise":465,"dhuhr":697,"asr":799,"maghrib":930,"isha":1036,"src":"f"},"12-21":{"fajr":381,"sunrise":466,"dhuhr":697,"asr":799,"maghrib":930,"isha":1037,"src":"f"},"12-22":{"fajr":381,"sunrise":466,"dhuhr":698,"asr":800,"maghrib":931,"isha":1037,"src":"f"},"12-23":{"fajr":382,"sunrise":467,"dhuhr":698,"asr":801,"maghrib":932,"isha":1038,"src":"f"},"12-24":{"fajr":382,"sunrise":467,"dhuhr":699,"asr":801,"maghrib":932,"isha":1039,"src":"f"},"12-25":{"fajr":383,"sunrise":468,"dhuhr":700,"asr":802,"maghrib":933,"isha":1040,"src":"f"},"12-26":{"fajr":383,"sunrise":468,"dhuhr":700,"asr":803,"maghrib":934,"isha":1040,"src":"f"},"12-27":{"fajr":383,"sunrise":468,"dhuhr":701,"asr":804,"maghrib":934,"isha":1041,"src":"f"},"12-28":{"fajr":383,"sunrise":468,"dhuhr":701,"asr":804,"maghrib":935,"isha":1042,"src":"f"},"12-29":{"fajr":383,"sunrise":468,"dhuhr":702,"asr":804,"maghrib":936,"isha":1044,"src":"f"},"12-30":{"fajr":383,"sunrise":468,"dhuhr":702,"asr":805,"maghrib":937,"isha":1045,"src":"f"},"12-31":{"fajr":383,"sunrise":468,"dhuhr":703,"asr":806,"maghrib":938,"isha":1046,"src":"f"}}}</script>
 
 <script>
 (function(){
 'use strict';
 
 /* === core:begin ===========================================================
-   Pure time maths. No DOM below this line until core:end - the throwaway Node
-   harness in tools/ slices exactly this region out and tests the shipped code
-   rather than a copy of it. Keep it that way.
+   Pure time maths. No DOM below this line until core:end - the test harness
+   slices exactly this region out and runs the shipped code rather than a copy.
+   Verified minute-by-minute across a whole year against an independent
+   implementation. Keep it that way.
    ======================================================================== */
 
 var ZONE = 'Europe/Amsterdam';
@@ -439,17 +310,9 @@ var ZONE = 'Europe/Amsterdam';
 /* The five obligatory windows in the order the day runs them, plus Tahajjud,
    which is voluntary and deliberately overlaps the end of Isha. */
 var NAMES = {
-  tahajjud:{ ar:'Tahajjud', tr:'Teheccüd' },
-  fajr:    { ar:'Fajr',     tr:'Sabah'  },
-  dhuhr:   { ar:'Dhuhr',    tr:'Öğle'   },
-  asr:     { ar:'Asr',      tr:'İkindi' },
-  maghrib: { ar:'Maghrib',  tr:'Akşam'  },
-  isha:    { ar:'Isha',     tr:'Yatsı'   }
+  tahajjud:'Tahajjud', fajr:'Fajr', dhuhr:'Dhuhr',
+  asr:'Asr', maghrib:'Maghrib', isha:'Isha'
 };
-
-var WEEKDAYS = ['duminică','luni','marți','miercuri','joi','vineri','sâmbătă'];
-var MONTHS = ['ianuarie','februarie','martie','aprilie','mai','iunie',
-              'iulie','august','septembrie','octombrie','noiembrie','decembrie'];
 
 /* Every clock value on screen is derived through this one formatter. The phone's
    own local time is never read: he travels, and the mosque's schedule stays
@@ -474,11 +337,7 @@ function zoned(t){
 
 function pad2(n){ return (n < 10 ? '0' : '') + n; }
 function hhmm(t){ var z = zoned(t); return pad2(z.h) + ':' + pad2(z.mi); }
-function hhmmss(t){ var z = zoned(t); return pad2(z.h) + ':' + pad2(z.mi) + ':' + pad2(z.s); }
 
-/* Amsterdam's UTC offset at an instant, in ms. Only the day rail needs it - the
-   prayer instants themselves never require a local->UTC conversion, which is
-   the whole reason times.json stores minutes-after-UTC-midnight. */
 function offsetAt(t){
   var base = Math.floor(t / 1000) * 1000;      /* zoned() has no ms to give back */
   var z = zoned(base);
@@ -492,22 +351,14 @@ function shiftCivil(c, n){
   return { y:d.getUTCFullYear(), m:d.getUTCMonth() + 1, d:d.getUTCDate() };
 }
 
-function weekdayOf(c){ return new Date(Date.UTC(c.y, c.m - 1, c.d)).getUTCDay(); }
 function keyOf(c){ return pad2(c.m) + '-' + pad2(c.d); }
 
 /* 00:00 Amsterdam on a given civil day, as an instant. Correct on both switch
-   days because the offset is sampled at 00:00 UTC, which on 29 March is still
-   CET (the jump happens at 01:00 UTC) and on 25 October is still CEST. */
+   days because the offset is sampled at 00:00 UTC, which on the March Sunday is
+   still CET (the jump happens at 01:00 UTC) and in October is still CEST. */
 function localMidnight(c){
   var guess = Date.UTC(c.y, c.m - 1, c.d);
   return guess - offsetAt(guess);
-}
-
-/* The instant of local hour h on the day that starts at dayStart. Two passes,
-   because adding h hours can cross a DST boundary and land an hour out. */
-function localHour(dayStart, h){
-  var t = dayStart + h * 3600000;
-  return t - (offsetAt(t) - offsetAt(dayStart));
 }
 
 /* A stored value is "minutes after 00:00 UTC on this calendar day", so the
@@ -580,9 +431,9 @@ function stateAt(data, now){
   for (i = 0; i < span.length; i++){
     var w = span[i];
     if (now >= w.start && now < w.end){
-      if (w.vol) tahajjud = w; else current = w;   /* the two never collide: only Isha overlaps Tahajjud */
+      if (w.vol) tahajjud = w; else current = w;   /* only Isha overlaps Tahajjud */
     }
-    /* "Next adhan" is strictly in the future, so at the adhan instant itself the
+    /* "Next" is strictly in the future, so at the adhan instant itself the
        countdown has already moved on to the following prayer instead of sitting
        at 00:00:00. Tahajjud has no adhan and is never the answer. */
     if (!w.vol && w.start > now && (!next || w.start < next.start)) next = w;
@@ -591,22 +442,16 @@ function stateAt(data, now){
   var T = dayTimes(data, civil);
   var inGap = (now >= T.sunrise && now < T.dhuhr);
 
-  /* The rows are today's, start to finish - one anchor day, no mixing. The one
-     exception is Isha in the small hours: the window actually open then began
-     last night, so that row shows the instance he is standing in rather than
-     tonight's, and the card and the row agree to the minute. */
   var rows = [], nextRow = null;
   for (i = 0; i < today.length; i++){
     var r = { id:today[i].id, start:today[i].start, end:today[i].end, vol:!!today[i].vol, state:'' };
     /* In the small hours the window actually open is LAST NIGHT'S Isha, not the
        one that opens this evening. Showing the instance he is standing in keeps
        the row and the card agreeing to the minute - but it has to say so, or
-       the row silently contradicts the Maghrib row above it, every single
-       night of the year. Hence r.carried, and the "aseară" tag. */
+       the row silently contradicts the Maghrib row above it. */
     if (current && current.id === r.id && (current.start !== r.start)){
       r.start = current.start; r.end = current.end; r.carried = true;
     }
-    if (tahajjud && r.vol && tahajjud.start !== r.start){ r.start = tahajjud.start; r.end = tahajjud.end; }
     if (now >= r.start && now < r.end) r.state = 'on';
     else if (now >= r.end) r.state = 'past';
     else {
@@ -621,32 +466,12 @@ function stateAt(data, now){
   }
   if (nextRow) nextRow.state = 'next';
 
-  /* Once Isha has begun, nothing left in today's list is still to come; the two
-     quiet times for tomorrow morning stop the screen going blind at 23:50. */
-  var tmr = null;
-  if (next && next.start >= localMidnight(shiftCivil(civil, 1))){
-    var tw = windowsFor(data, shiftCivil(civil, 1));
-    if (tw) tmr = { tahajjud:tw[0].start, fajr:tw[1].start };
-  }
-
   if (!next) return null;   /* cannot happen with three days loaded; cheaper than a crash */
-
-  /* Guarded. windowsFor() answers null whenever the schedule is missing a day,
-     and indexing that null took the entire render down with it - which, before
-     tick() learned to re-arm in a finally, froze the clock permanently. */
-  var prevWs = windowsFor(data, shiftCivil(civil, -1));
 
   return {
     now:now, civil:civil, rows:rows, current:current, tahajjud:tahajjud,
-    next:next, gap:inGap, sunrise:T.sunrise, tomorrow:tmr,
-    dayStart:localMidnight(civil),
-    dayEnd:localMidnight(shiftCivil(civil, 1)),
-    /* The rail draws real clock time, so it wants today's windows exactly as the
-       day runs them - not the rows, whose Isha may have been swapped for last
-       night's instance. Yesterday's Isha is added because it owns the small
-       hours at the left end of the bar. */
-    dayWindows:today,
-    prevIsha:prevWs ? prevWs[5] : null
+    next:next, gap:inGap, sunrise:T.sunrise,
+    tomorrow:(next.start >= localMidnight(shiftCivil(civil, 1)))
   };
 }
 
@@ -662,24 +487,17 @@ function human(ms){
 }
 
 /* The countdown: hh:mm:ss above an hour, mm:ss below it, every field padded.
-   The padding is not cosmetic. The hero is centred, so a string that changes
-   LENGTH shifts the whole number sideways - and the claim that two adhans are
-   never more than ten hours apart here is simply false: the Isha->Fajr gap is
-   ten hours or more on 144 nights of the year and reaches 13h05 on 20 December,
-   so it crosses from one hour digit to two every winter evening. Padded, the
-   glyph count never changes and nothing moves.
-   It does still switch from mm:ss to hh:mm:ss as the last hour opens. That one
-   is deliberate and harmless: the number is centred, so it grows outwards from
-   the middle rather than sliding sideways, and it happens once per window
-   rather than once a second. */
+   The padding is not cosmetic. The claim that two adhans are never more than
+   ten hours apart at this latitude is false - the Isha->Fajr gap is ten hours
+   or more on 144 nights of the year and reaches 13h05 on 20 December - so an
+   unpadded hour would change the string's LENGTH every winter evening. It does
+   still switch from mm:ss to hh:mm:ss as the last hour opens; that one is
+   deliberate and harmless, because the number is centred and grows outwards
+   from the middle rather than sliding sideways. */
 function clockdown(ms){
   var s = Math.max(0, Math.ceil(ms / 1000));
   var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), q = s % 60;
   return h > 0 ? (pad2(h) + ':' + pad2(m) + ':' + pad2(q)) : (pad2(m) + ':' + pad2(q));
-}
-
-function roDate(c){
-  return WEEKDAYS[weekdayOf(c)] + ', ' + c.d + ' ' + MONTHS[c.m - 1] + ' ' + c.y;
 }
 
 /* === core:end ============================================================ */
@@ -687,12 +505,10 @@ function roDate(c){
 /* ------------------------------------------------------------------ DOM ---- */
 var $ = function(id){ return document.getElementById(id); };
 var el = {
-  date:$('date'), clock:$('clock'), hero:$('hero'), nextName:$('nextName'),
-  count:$('count'), nextAt:$('nextAt'), card:$('card'), openLabel:$('openLabel'),
-  openName:$('openName'), remain:$('remain'), barFrom:$('barFrom'), barTo:$('barTo'),
-  fill:$('fill'), dot:$('dot'), tahNote:$('tahNote'), railWrap:$('railWrap'),
-  tahStrip:$('tahStrip'), segs:$('segs'), nowMark:$('nowMark'), ticks:$('ticks'),
-  list:$('list'), tomorrow:$('tomorrow'), msg:$('msg')
+  nextName:$('nextName'), count:$('count'), nextAt:$('nextAt'),
+  card:$('card'), openLabel:$('openLabel'), openName:$('openName'), remain:$('remain'),
+  barFrom:$('barFrom'), barTo:$('barTo'), fill:$('fill'), dot:$('dot'),
+  list:$('list'), msg:$('msg')
 };
 
 /* Writing to the DOM once a second is free only if we do not actually write.
@@ -702,163 +518,69 @@ function setHTML(node, s){ if (node.__h !== s){ node.__h = s; node.innerHTML = s
 function setClass(node, s){ if (node.__c !== s){ node.__c = s; node.className = s; } }
 function show(node, on){ if (node.__s !== on){ node.__s = on; node.classList.toggle('hide', !on); } }
 
-function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
-
 /* ----------------------------------------------------------------- render -- */
 var DATA = null;
 
-function renderClockOnly(now){
-  /* Even with no schedule at all the screen still tells him the date, the place
-     and the Amsterdam time. A blank app is the one unacceptable failure. */
-  setText(el.date, roDate(civilOf(now)));
-  setText(el.clock, hhmmss(now));
-}
-
 function render(now){
-  renderClockOnly(now);
-
   var st = DATA ? stateAt(DATA, now) : null;
   var ok = !!st;
-  show(el.hero, ok); show(el.card, ok); show(el.railWrap, ok); show(el.list, ok);
-  show(el.msg, !ok);
+  show(el.card, ok); show(el.list, ok); show(el.msg, !ok);
   if (!ok){
-    setHTML(el.msg, 'Orarul nu este încă disponibil.<br>Încerc din nou automat.');
-    show(el.tomorrow, false);
+    setText(el.nextName, ''); setText(el.count, '—'); setText(el.nextAt, '');
+    setHTML(el.msg, 'Prayer times not available yet.<br>Retrying automatically.');
     return;
   }
 
-  /* --- hero: the one thing he opens the app for ------------------------- */
-  var n = NAMES[st.next.id];
-  setHTML(el.nextName, esc(n.ar) + ' <span>' + esc(n.tr) + '</span>');
+  /* --- the one thing he opens the app for ------------------------------- */
+  setText(el.nextName, NAMES[st.next.id]);
   setText(el.count, clockdown(st.next.start - now));
-  /* Late in the evening the next adhan is tomorrow's Fajr, while the Fajr row in
-     today's list is dimmed as past. Saying "mâine" is the whole difference
+  /* Late in the evening the next adhan is tomorrow's Fajr while the Fajr row in
+     the list is dimmed as past. Saying "tomorrow" is the whole difference
      between that reading as considered and reading as a bug. */
-  setText(el.nextAt, st.tomorrow ? ('adhan mâine la ' + hhmm(st.next.start))
-                                 : ('adhan la ' + hhmm(st.next.start)));
+  setText(el.nextAt, (st.tomorrow ? 'tomorrow at ' : 'at ') + hhmm(st.next.start));
 
   /* --- the window open right now ---------------------------------------- */
-  var from, to, frac;
+  var from, to;
   if (st.current){
-    var c = NAMES[st.current.id];
     setClass(el.card, 'card');
-    /* Short enough not to wrap next to "mai sunt 1h 46m" on a 320px iPhone SE. */
-    setText(el.openLabel, 'Acum deschis');
-    setHTML(el.openName, esc(c.ar) + ' <span>&middot; ' + esc(c.tr) + '</span>');
-    setText(el.remain, 'mai sunt ' + human(st.current.end - now));
+    setText(el.openLabel, 'Now');
+    setText(el.openName, NAMES[st.current.id]);
+    setText(el.remain, human(st.current.end - now) + ' left');
     from = st.current.start; to = st.current.end;
   } else {
     /* Between sunrise and Dhuhr nothing is open, and saying so plainly is more
        use to him than pretending Fajr is somehow still running. */
     setClass(el.card, 'card gap');
-    setText(el.openLabel, 'Acum');
-    setHTML(el.openName, 'Nicio fereastră deschisă');
-    setText(el.remain, NAMES[st.next.id].ar + ' în ' + human(st.next.start - now));
+    setText(el.openLabel, 'Now');
+    setText(el.openName, 'No window open');
+    /* Deliberately blank. The hero directly above already counts down to this
+       exact prayer, and the bar below already ends at its time - a third copy
+       of the same fact is noise. */
+    setText(el.remain, '');
     from = st.gap ? st.sunrise : now; to = st.next.start;
   }
-  frac = Math.min(1, Math.max(0, (now - from) / Math.max(1, to - from)));
+  var frac = Math.min(1, Math.max(0, (now - from) / Math.max(1, to - from)));
   setText(el.barFrom, hhmm(from));
   setText(el.barTo, hhmm(to));
   var pct = (frac * 100).toFixed(2) + '%';
   if (el.fill.__w !== pct){ el.fill.__w = pct; el.fill.style.width = pct; el.dot.style.left = pct; }
 
-  /* Tahajjud open at the same time as Isha is worth one quiet line, not a
-     second headline - it is voluntary. */
-  var tahOn = !!st.tahajjud;
-  show(el.tahNote, tahOn);
-  if (tahOn){
-    setHTML(el.tahNote, 'Tahajjud e deschis &middot; până la ' +
-      '<b class="num">' + hhmm(st.tahajjud.end) + '</b>');
-  }
-
-  renderRail(st, now);
   renderList(st);
-
-  show(el.tomorrow, !!st.tomorrow);
-  if (st.tomorrow){
-    setHTML(el.tomorrow,
-      '<span>Mâine &middot; Tahajjud <b class="num">' + hhmm(st.tomorrow.tahajjud) + '</b></span>' +
-      '<span>Fajr <b class="num">' + hhmm(st.tomorrow.fajr) + '</b></span>');
-  }
-}
-
-/* The day as one bar, midnight to midnight in Amsterdam. Health's sleep stages,
-   not a progress bar: each window is a segment, the empty stretch between
-   sunrise and Dhuhr is genuinely empty, and the hairline is now. */
-var RAIL_ALPHA = { fajr:.30, dhuhr:.38, asr:.46, maghrib:.54, isha:.62 };
-
-function renderRail(st, now){
-  var span = st.dayEnd - st.dayStart;             /* 23, 24 or 25 hours */
-  var pos = function(t){ return Math.min(100, Math.max(0, (t - st.dayStart) / span * 100)); };
-
-  var segs = [], i, w;
-  var all = (st.prevIsha ? [st.prevIsha] : []).concat(st.dayWindows);
-  for (i = 0; i < all.length; i++){
-    w = all[i];
-    if (w.vol) continue;                           /* drawn as its own dotted strip */
-    if (w.end <= st.dayStart || w.start >= st.dayEnd) continue;
-    var a = pos(w.start), b = pos(w.end);
-    if (b - a <= 0) continue;
-    var live = (now >= w.start && now < w.end);
-    segs.push('<div class="seg' + (live ? ' on' : '') + '" style="left:' + a.toFixed(3) +
-      '%;width:' + Math.max(0.4, b - a - 0.35).toFixed(3) + '%;opacity:' +
-      (live ? 1 : (RAIL_ALPHA[w.id] || .4)) + '"></div>');
-  }
-  /* The segments only change when a window opens or closes, so this innerHTML is
-     a no-op on almost every tick; the hairline that does move every second is a
-     separate, permanent node that only gets a style write. */
-  setHTML(el.segs, segs.join(''));
-  var np = pos(now).toFixed(3) + '%';
-  if (el.nowMark.__l !== np){ el.nowMark.__l = np; el.nowMark.style.left = np; }
-
-  var t = null;
-  for (i = 0; i < st.dayWindows.length; i++) if (st.dayWindows[i].vol) t = st.dayWindows[i];
-  if (t && t.end > st.dayStart && t.start < st.dayEnd){
-    var ta = pos(t.start), tb = pos(t.end);
-    setHTML(el.tahStrip, '<i style="left:' + ta.toFixed(3) + '%;width:' + (tb - ta).toFixed(3) + '%"></i>');
-  } else setHTML(el.tahStrip, '');
-
-  /* Ticks are computed, not assumed to be every 4.1666% - on a switch day the
-     hours are not evenly spaced across the bar and the marks must still line up.
-     They only change at midnight, so they are built once per day rather than
-     once per second. */
-  if (el.ticks.__day !== st.dayStart){
-    el.ticks.__day = st.dayStart;
-    var out = [], h;
-    for (h = 0; h <= 24; h += 3){
-      var p = pos(localHour(st.dayStart, h));
-      out.push('<i style="left:' + p.toFixed(3) + '%"></i>');
-      if (h % 6 === 0) out.push('<b style="left:' + p.toFixed(3) + '%">' + pad2(h === 24 ? 24 : h) + '</b>');
-    }
-    setHTML(el.ticks, out.join(''));
-  }
 }
 
 function renderList(st){
   var html = [], i;
   for (i = 0; i < st.rows.length; i++){
-    var r = st.rows[i], nm = NAMES[r.id];
-    var cls = 'row ' + r.state + (r.vol ? ' vol' : '') + (i === 0 ? ' first' : '');
+    var r = st.rows[i];
     html.push(
-      '<li class="' + cls + '">' +
+      '<li class="row ' + r.state + (r.vol ? ' vol' : '') + (i === 0 ? ' first' : '') + '">' +
         (r.vol ? '<span class="rule"></span>' : '') +
         '<span class="dot"></span>' +
-        '<span class="r-name">' +
-          '<span class="r-ar">' + esc(nm.ar) + '</span>' +
-          '<span class="r-tr">' + esc(nm.tr) + '</span>' +
-          (r.vol ? '<span class="tag opt">voluntar</span>' : '') +
-          (r.carried ? '<span class="tag eve">aseară</span>' : '') +
+        '<span class="r-name">' + NAMES[r.id] +
+          (r.carried ? '<span class="eve">last night</span>' : '') +
         '</span>' +
         '<span class="r-int num">' + hhmm(r.start) + ' → ' + hhmm(r.end) + '</span>' +
       '</li>');
-
-    /* Sunrise closes Fajr and opens nothing: a hairline between the rows, never
-       a row of its own. */
-    if (r.id === 'fajr'){
-      html.push('<li class="sun"><span class="mk">&#9679;</span>' +
-        '<span>Răsărit <span class="num">' + hhmm(st.sunrise) + '</span></span>' +
-        '<span class="sp"></span><span>nicio fereastră până la Dhuhr</span></li>');
-    }
   }
   setHTML(el.list, html.join(''));
 }
@@ -876,7 +598,7 @@ function saveCached(d){
   try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch (e){}
 }
 
-/* A schedule is only allowed to replace the one on screen if it is actually a
+/* A schedule is only allowed to replace the one on screen if it really is a
    schedule. A captive portal answering 200 with a login page parses as nothing,
    but a truncated file could parse as an object with no days in it. */
 function usable(d){
@@ -929,8 +651,7 @@ function refreshTimes(){
        screen: the service worker serves times.json from Cache Storage, and that
        cache can predate both the copy compiled into this page and the copy in
        localStorage. Replacing blind would quietly put a superseded prayer time
-       back on his screen, which is the one failure this whole app exists to
-       avoid. Same comparison as at boot: newer "generated" wins. */
+       back on his screen, which is the one failure this app exists to avoid. */
     DATA = pickNewer(DATA, d);
     saveCached(DATA);
     tick();
@@ -943,6 +664,10 @@ function refreshTimes(){
 /* ------------------------------------------------------- service worker ---- */
 var swReg = null;
 
+function nudge(worker){
+  if (worker) { try { worker.postMessage('SKIP_WAITING'); } catch (e){} }
+}
+
 function setupSW(){
   if (!('serviceWorker' in navigator)) return;
   /* Secure contexts only - registering from file:// or plain http:// throws.
@@ -953,23 +678,17 @@ function setupSW(){
                h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
   if (!secure) return;
 
-  /* Only reload for a worker that REPLACED one. On a first visit the very first
-     worker also fires controllerchange, and reloading then would be a pointless
-     flash on the screen. */
   var hadController = !!navigator.serviceWorker.controller;
   var reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', function(){
     if (reloading) return;
     /* The FIRST controllerchange after a brand-new install is just a worker
        taking charge of a page that was already correct; reloading there would
-       be a pointless flash on screen. Every controllerchange after that one
-       means a NEW version replaced the old, and the page must be redrawn from
-       the new files.
-       The flag therefore has to be raised here. Leaving it false - which is
-       what this did - meant the early return fired for every later update too,
-       and the app silently never reloaded itself again for the life of that
-       page. The entire self-updating story was dead, on precisely the phone
-       that had just installed it. */
+       be a pointless flash. Every one after that means a NEW version replaced
+       the old, and the page must be redrawn from the new files.
+       The flag therefore has to be raised HERE. Leaving it false meant the
+       early return fired for every later update too, and the app silently
+       never reloaded itself again for the life of that page. */
     if (!hadController) { hadController = true; return; }
     reloading = true;
     location.reload();   /* nothing here is playing or unsaved, so this is safe */
@@ -978,11 +697,9 @@ function setupSW(){
   navigator.serviceWorker.register('./sw.js').then(function(reg){
     swReg = reg;
     /* iOS parks an installed-but-not-yet-active worker in "waiting", sometimes
-       for days - long enough that a corrected prayer time would simply never
-       arrive on the phone. sw.js already calls skipWaiting() on install, so
-       this is belt and braces, but it is the difference between "usually
-       updates" and "updates". Both the worker that is already waiting when we
-       register and the one that appears while the app is open are covered. */
+       for days - long enough that a corrected prayer time would never arrive.
+       Both the worker already waiting when we register and the one that appears
+       while the app is open are covered. */
     nudge(reg.waiting);
     reg.addEventListener('updatefound', function(){
       var sw = reg.installing;
@@ -994,10 +711,6 @@ function setupSW(){
   })['catch'](function(){ /* no worker: the app still works, just without offline */ });
 }
 
-function nudge(worker){
-  if (worker) { try { worker.postMessage('SKIP_WAITING'); } catch (e){} }
-}
-
 function checkForUpdate(){
   if (swReg && swReg.update) { try { swReg.update(); } catch (e){} }
 }
@@ -1007,7 +720,7 @@ var timer = 0;
 
 function tick(){
   /* The re-arm lives in finally for one reason: if render() ever throws, the
-     old version simply stopped scheduling itself, and the clock froze at that
+     old version simply stopped scheduling itself and the clock froze at that
      second for good - with nothing on screen to suggest that what he is
      reading is hours stale. Now a broken frame costs one frame. */
   try { render(Date.now()); }
@@ -1045,7 +758,7 @@ document.addEventListener('visibilitychange', function(){
   tick();
   refreshAll(false);
 });
-window.addEventListener('pageshow', function(){ tick(); refreshAll(false); });  /* back-forward cache */
+window.addEventListener('pageshow', function(){ tick(); refreshAll(false); });
 window.addEventListener('focus', function(){ tick(); });
 window.addEventListener('online', function(){ refreshAll(true); });
 setInterval(function(){ refreshAll(true); }, 900000);            /* 15 minutes */

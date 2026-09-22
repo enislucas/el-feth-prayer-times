@@ -7,7 +7,7 @@
 // and the old files are only thrown away when the cache NAME changes. So the
 // ritual is: edit anything in the app -> bump CACHE_VERSION -> commit -> push.
 // Forgetting it is the one reason an update appears never to arrive.
-const CACHE_VERSION = 'elfeth-v1';
+const CACHE_VERSION = 'elfeth-v2';
 
 // Every cache this app has ever opened starts with this prefix so activate()
 // can delete the old ones without touching a different app on the same origin.

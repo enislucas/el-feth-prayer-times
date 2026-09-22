@@ -39,8 +39,8 @@ const DATA_DIR = __dirname;
 const OUT_FILE = path.join(DATA_DIR, '..', 'times.json');
 const TZ = 'Europe/Amsterdam';
 
-const PLACE = 'Tilburg, Nederland';
-const MOSQUE = 'Moscheea El-Feth';
+const PLACE = 'Tilburg, Netherlands';
+const MOSQUE = 'El-Feth Moskee';
 
 // Output key -> field in the mosque feed. asr_mithl_1 is the standard opinion
 // (shadow factor 1), which is the one this app shows; asr_mithl_2 is Hanafi.

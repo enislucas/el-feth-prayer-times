@@ -1,8 +1,8 @@
 # Namaz — El-Feth
 
-Prayer times for **Moscheea El-Feth**, Stedekestraat 27, Tilburg, installed on a
-phone's home screen as a PWA. Romanian interface, prayer names in Arabic
-transliteration and Turkish. Works completely offline and keeps itself up to
+Prayer times for **El-Feth Moskee**, Stedekestraat 27, Tilburg, installed on a
+phone's home screen as a PWA. English, and deliberately bare: there is nothing on the screen that is not a
+time or the name of a prayer. Works completely offline and keeps itself up to
 date without anyone touching it.
 
 It shows, in this order:
@@ -10,11 +10,10 @@ It shows, in this order:
 - **the time left until the next adhan**, live to the second, and when it is;
 - **the window that is open right now** as an interval, with how far through it
   you are and how long is left;
-- **the whole day as one bar** — midnight to midnight, each window a segment,
-  the empty stretch between sunrise and Dhuhr genuinely empty;
 - **every window of the day as an interval**, Tahajjud first, then the five.
 
-There are no buttons, no settings and no install banner. It is a display.
+That is all. No location line, no date, no clock (the phone has one), no
+buttons, no settings, no install banner. It is a display.
 
 ## The prayer windows
 
@@ -32,17 +31,18 @@ Deliberate choices, not oversights:
 - **Tahajjud** is the last third of the night: `night = fajr − maghrib`, and the
   window is `fajr − night/3 → fajr`. The night that ends at Fajr on a given day
   began at **the previous day's Maghrib**. It overlaps Isha, because it really
-  does — Isha is the obligatory window and keeps the accent bar; Tahajjud is
-  shown inset behind a dashed rule and labelled *voluntar*.
+  does — Isha is the obligatory window and keeps the accent bar; Tahajjud sits
+  inset behind a dashed rule and never takes the solid fill. That is the whole
+  distinction, and it needs no badge.
 - **Asr** is the standard opinion (shadow factor 1), not Hanafi, because that is
   what the mosque publishes.
-- **Sunrise** is a boundary, never a prayer row. On a 6.1" screen and larger it
-  appears as a hairline note; the Fajr row's interval already ends at it.
+- **Sunrise** is a boundary, never a prayer row, and is not shown as one: the
+  Fajr row's interval already ends at it, to the minute.
 - Between sunrise and Dhuhr **nothing is open**, and the app says so rather than
   pretending Fajr is still running.
 - In the small hours the Isha row shows **last night's** instance — the one you
-  are actually standing in — tagged `aseară` so it cannot be misread against the
-  Maghrib row above it.
+  are actually standing in — marked *last night* so it cannot be misread
+  against the Maghrib row above it.
 
 ## Where the times come from
 
@@ -138,11 +138,10 @@ moments across the year (midday, Tahajjud at 03:10 on the longest night of the
 year, the minute before Isha, the sunrise→Dhuhr gap, New Year's Eve, and both
 daylight-saving switch days).
 
-**Everything fits on one screen, in every state, on every iPhone from the 12
-mini (375×812) upward**, with no clipping, no horizontal scroll and no console
-errors. The 4.7" SE (375×667) fits too, by dropping the sunrise note and
-tightening the spacing. The only device that scrolls is a 320×568 iPhone 5/SE1,
-by 49–80px — it scrolls cleanly and nothing is cut off.
+**All 42 combinations fit on one screen — no scrolling, no clipping, no
+horizontal overflow, no console errors** — down to and including a 320×568
+iPhone 5/SE1, in every state. The layout is also the same height at midday and
+at 03:00, so a scrollbar never appears as a surprise in the middle of the night.
 
 Also handled: `viewport-fit=cover` with safe-area padding on all four edges,
 `black-translucent` status bar, an opaque 180×180 `apple-touch-icon.png` (iOS
