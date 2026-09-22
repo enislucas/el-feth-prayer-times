@@ -17,6 +17,12 @@
 <meta name="apple-mobile-web-app-title" content="Namaz">
 <meta name="format-detection" content="telephone=no">
 
+<!-- sw.js reads this exact string out of the response body before it will let
+     anything replace the cached app shell. A captive wifi portal answers every
+     request with 200 and text/html, which is indistinguishable from this page
+     by headers alone - but it will not carry this marker. Do not remove. -->
+<meta name="app-id" content="elfeth-prayer-times">
+
 <title>Namaz — El-Feth</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <!-- iOS ignores the manifest icons for "Add to Home Screen"; this link is the one it reads. -->
@@ -661,7 +667,11 @@ function human(ms){
    never more than ten hours apart here is simply false: the Isha->Fajr gap is
    ten hours or more on 144 nights of the year and reaches 13h05 on 20 December,
    so it crosses from one hour digit to two every winter evening. Padded, the
-   glyph count never changes and nothing moves. */
+   glyph count never changes and nothing moves.
+   It does still switch from mm:ss to hh:mm:ss as the last hour opens. That one
+   is deliberate and harmless: the number is centred, so it grows outwards from
+   the middle rather than sliding sideways, and it happens once per window
+   rather than once a second. */
 function clockdown(ms){
   var s = Math.max(0, Math.ceil(ms / 1000));
   var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), q = s % 60;
@@ -915,7 +925,15 @@ function refreshTimes(){
     return r.json();
   }).then(function(d){
     if (killed || !usable(d)) return;
-    DATA = d; saveCached(d); tick();
+    /* A fetch can legitimately answer with something OLDER than what is on
+       screen: the service worker serves times.json from Cache Storage, and that
+       cache can predate both the copy compiled into this page and the copy in
+       localStorage. Replacing blind would quietly put a superseded prayer time
+       back on his screen, which is the one failure this whole app exists to
+       avoid. Same comparison as at boot: newer "generated" wins. */
+    DATA = pickNewer(DATA, d);
+    saveCached(DATA);
+    tick();
   })['catch'](function(){
     /* Offline, hung, or a wifi portal. The cached schedule is at worst a day
        stale and is always better than an empty screen, so: say nothing. */
@@ -927,7 +945,13 @@ var swReg = null;
 
 function setupSW(){
   if (!('serviceWorker' in navigator)) return;
-  if (location.protocol !== 'https:') return;   /* file:// and http:// would throw */
+  /* Secure contexts only - registering from file:// or plain http:// throws.
+     http://localhost is a secure context BY DEFINITION, and excluding it meant
+     the offline and self-update paths could not be exercised locally at all. */
+  var h = location.hostname;
+  var secure = (location.protocol === 'https:') ||
+               h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+  if (!secure) return;
 
   /* Only reload for a worker that REPLACED one. On a first visit the very first
      worker also fires controllerchange, and reloading then would be a pointless
@@ -935,7 +959,18 @@ function setupSW(){
   var hadController = !!navigator.serviceWorker.controller;
   var reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', function(){
-    if (!hadController || reloading) return;
+    if (reloading) return;
+    /* The FIRST controllerchange after a brand-new install is just a worker
+       taking charge of a page that was already correct; reloading there would
+       be a pointless flash on screen. Every controllerchange after that one
+       means a NEW version replaced the old, and the page must be redrawn from
+       the new files.
+       The flag therefore has to be raised here. Leaving it false - which is
+       what this did - meant the early return fired for every later update too,
+       and the app silently never reloaded itself again for the life of that
+       page. The entire self-updating story was dead, on precisely the phone
+       that had just installed it. */
+    if (!hadController) { hadController = true; return; }
     reloading = true;
     location.reload();   /* nothing here is playing or unsaved, so this is safe */
   });

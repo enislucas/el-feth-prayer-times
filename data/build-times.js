@@ -453,7 +453,21 @@ function main() {
     const rec = { src: 'c' };
     // Prayer times move by only a minute or two a day, so a straight line
     // across a one- or two-day hole is accurate to well under a minute.
-    for (const k of KEYS) rec[k] = Math.round(a[k] + (b[k] - a[k]) * t);
+    //
+    // But the values here are still LOCAL clock times, and local clock time
+    // jumps an hour twice a year. Interpolating straight across that boundary
+    // would put the filled day out by up to thirty minutes while every later
+    // check still passed, because the result is perfectly self-consistent - it
+    // is just wrong. So each neighbour is shifted onto a common UTC basis
+    // first, the line is drawn there, and the result is shifted back onto the
+    // gap day's own offset.
+    const offOf = (key) => offsetMinutesByRule(
+      Date.UTC(YEAR, Number(key.slice(0, 2)) - 1, Number(key.slice(3, 5)), 12), YEAR);
+    const offA = offOf(allKeys[before]), offB = offOf(allKeys[after]), offK = offOf(key);
+    for (const k of KEYS) {
+      const utcA = a[k] - offA, utcB = b[k] - offB;
+      rec[k] = Math.round(utcA + (utcB - utcA) * t + offK);
+    }
     days.set(key, rec);
   }
   if (missing.length) {
