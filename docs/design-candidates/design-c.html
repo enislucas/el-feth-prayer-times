@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Namaz — El-Feth</title>
+
+<!-- The service worker looks for this exact string before it lets a response
+     replace the cached shell. Without it, hotel wifi can cache a login page
+     over the app. See sw.js -> SHELL_MARKER. -->
+<meta name="app-id" content="elfeth-prayer-times">
+
+<meta name="description" content="Orarul rugăciunilor — Moscheea El-Feth, Tilburg.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#090B10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- black-translucent = the page runs under the status bar, so every safe-area
+     inset below is load-bearing, not decoration. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Namaz">
+<!-- iOS will happily turn "19:38" into a phone link. It must not. -->
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" href="./icon-192.png">
+
+<style>
+:root{
+  --bg:#090B10;
+  --elev:rgba(255,255,255,.045);
+  --line:rgba(255,255,255,.085);
+  --tx:#F3F6FA;
+  --tx-2:#A2ABBA;
+  --tx-3:#6E7787;
+  --mint:#31D6A8;
+  --sky:#4FA9F2;
+  --violet:#9C8CFB;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+html{
+  background:var(--bg);
+  /* iOS inflates text in landscape without this. */
+  -webkit-text-size-adjust:100%;text-size-adjust:100%;
+}
+
+body{
+  background:var(--bg);
+  color:var(--tx);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+  font-size:16px;line-height:1.35;
+  letter-spacing:-.005em;
+  -webkit-font-smoothing:antialiased;
+  /* Almost every figure on this screen is a clock. Tabular digits stop the
+     countdown from reshuffling its own layout sixty times a minute. */
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum" 1;
+  /* No rubber band: behind the page is a different colour and it shows. */
+  overscroll-behavior:none;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;
+  min-height:100vh;      /* order matters: old iOS stops here */
+  min-height:100dvh;     /* 15.4+ takes this one */
+}
+
+[hidden]{display:none !important}
+
+/* Ambient light. Three very flat radials; no filters, nothing to composite. */
+.bg{
+  position:fixed;left:0;right:0;top:0;bottom:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(120% 52% at 50% -10%, rgba(49,214,168,.11), rgba(49,214,168,0) 62%),
+    radial-gradient(85% 40% at 92% 10%, rgba(79,169,242,.075), rgba(79,169,242,0) 60%),
+    radial-gradient(95% 45% at 2% 104%, rgba(156,140,251,.07), rgba(156,140,251,0) 60%);
+}
+
+.wrap{
+  position:relative;z-index:1;
+  max-width:460px;margin:0 auto;
+  display:flex;flex-direction:column;gap:10px;
+  min-height:100vh;min-height:100dvh;
+  padding-top:calc(env(safe-area-inset-top,0px) + 12px);
+  padding-bottom:calc(env(safe-area-inset-bottom,0px) + 16px);
+  padding-left:calc(env(safe-area-inset-left,0px) + 18px);
+  padding-right:calc(env(safe-area-inset-right,0px) + 18px);
+}
+
+.eyebrow{
+  font-size:10px;font-weight:700;letter-spacing:.17em;
+  text-transform:uppercase;color:var(--tx-2);
+}
+
+/* ---------- header ---------- */
+.top{display:grid;grid-template-columns:1fr auto;align-items:baseline;column-gap:12px;row-gap:1px}
+.date{font-size:15.5px;font-weight:600;letter-spacing:-.014em}
+.clock{font-size:15.5px;font-weight:600;color:var(--tx-2);text-align:right}
+.place{font-size:11.5px;font-weight:500;color:var(--tx-3)}
+.tzn{font-size:11.5px;font-weight:500;color:var(--tx-3);text-align:right}
+
+/* ---------- the dial ---------- */
+.hero{display:flex;justify-content:center}
+.dial{position:relative;width:min(69vw,272px);height:min(69vw,272px)}
+.dial svg{position:absolute;top:0;left:0;width:100%;height:100%;display:block;overflow:visible}
+
+.trk{fill:none;stroke:rgba(255,255,255,.07);stroke-width:9}
+.arc{fill:none;stroke-width:9;stroke-linecap:round;
+     filter:drop-shadow(0 0 7px rgba(49,214,168,.32));
+     transition:stroke-dashoffset 1s linear}
+/* The outer hairline sweeps once a minute. It is the only thing on screen that
+   visibly moves, and it is telling the truth while it moves. */
+.sec{fill:none;stroke:rgba(255,255,255,.22);stroke-width:1.5;stroke-linecap:round;
+     transition:stroke-dashoffset .95s linear}
+.head{fill:#9DF3DD;filter:drop-shadow(0 0 6px rgba(143,240,214,.85))}
+/* Coming back from the background, the correct values are far from the ones on
+   screen; the catch-up must be instant, not a one-second slide. */
+.nomo .arc,.nomo .sec,.nomo .bar i,.nomo .prog i{transition:none !important}
+
+.face{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+      text-align:center;padding:0 15%}
+.nx{margin-top:7px;display:flex;align-items:baseline;justify-content:center;gap:6px;white-space:nowrap}
+.nx-n{font-size:17px;font-weight:600;letter-spacing:-.015em}
+.nx-t{font-size:13px;font-weight:500;color:var(--tx-2)}
+.cd{margin-top:2px;font-size:clamp(38px,12.6vw,52px);font-weight:600;
+    letter-spacing:-.028em;line-height:1.08}
+.cd-sub{margin-top:3px;font-size:12.5px;font-weight:500;color:var(--tx-2)}
+
+/* ---------- the window that is open now ---------- */
+.card{background:var(--elev);border:1px solid var(--line);border-radius:18px;padding:11px 14px 13px}
+.l1{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.rem{font-size:12.5px;font-weight:600;color:var(--mint);white-space:nowrap}
+.nw-name{margin-top:4px;display:flex;align-items:baseline;gap:7px}
+.nw-name .nm{font-size:19px;font-weight:600;letter-spacing:-.018em}
+.nw-name .t2{font-size:13px;font-weight:500;color:var(--tx-2)}
+.bar{margin-top:10px;height:4px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:99px;
+       background:linear-gradient(90deg,var(--mint),var(--sky));
+       box-shadow:0 0 10px rgba(49,214,168,.4);
+       transition:width 1s linear}
+.ends{margin-top:6px;display:flex;justify-content:space-between;font-size:12.5px;font-weight:500;color:var(--tx-2)}
+/* the sunrise -> dhuhr hole in the day: same card, no accent, no pretending */
+.card.gap .rem{color:var(--tx-2)}
+.card.gap .bar i{background:linear-gradient(90deg,#5F6878,#8A93A3);box-shadow:none}
+.chip{margin-top:11px;display:inline-flex;align-items:center;gap:6px;
+      font-size:11.5px;font-weight:600;color:#C9BFFF;
+      background:rgba(156,140,251,.13);border:1px solid rgba(156,140,251,.22);
+      border-radius:99px;padding:4px 10px}
+
+/* ---------- the day ---------- */
+.tl{display:flex;flex-direction:column;gap:4px}
+.tl-head{padding:0 2px}
+.rows{position:relative}
+.rows:before{content:"";position:absolute;left:11px;top:20px;bottom:20px;width:1px;
+  background:linear-gradient(180deg,rgba(255,255,255,0),var(--line) 10%,var(--line) 90%,rgba(255,255,255,0))}
+
+.tr{position:relative;display:grid;grid-template-columns:22px 1fr auto;align-items:center;
+    column-gap:8px;padding:5px 10px 9px 0;border-radius:13px}
+.dot{justify-self:center;width:7px;height:7px;border-radius:50%;
+     background:var(--tx-3);box-shadow:0 0 0 4px var(--bg)}
+.mn{min-width:0;display:flex;align-items:baseline;gap:7px}
+.nm{font-size:15.5px;font-weight:600;letter-spacing:-.015em;white-space:nowrap}
+.t2{font-size:12px;font-weight:500;color:var(--tx-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{font-size:9px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;
+     padding:2.5px 6px;border-radius:6px;white-space:nowrap}
+.tag.nx{color:#9FE8D2;background:rgba(49,214,168,.12);border:1px solid rgba(49,214,168,.22)}
+.tag.vl{color:#C0B4FF;background:rgba(156,140,251,.11);border:1px solid rgba(156,140,251,.2)}
+.rt{text-align:right}
+.rg{font-size:14px;font-weight:600;white-space:nowrap}
+.rg .ar{color:var(--tx-3);font-weight:500;margin:0 3px}
+.du{font-size:10.5px;font-weight:500;color:var(--tx-3);margin-top:1px}
+
+.tr.past{opacity:.6}
+.tr.past .nm{font-weight:500}
+.tr.cur{background:linear-gradient(90deg,rgba(49,214,168,.13),rgba(49,214,168,.025))}
+.tr.cur .dot{width:9px;height:9px;background:var(--mint);
+             box-shadow:0 0 0 4px var(--bg),0 0 12px rgba(49,214,168,.75)}
+.tr.next .dot{width:9px;height:9px;background:var(--bg);border:2px solid var(--mint);
+              box-shadow:0 0 0 4px var(--bg)}
+.tr.vl .dot{background:var(--bg);border:1.5px solid rgba(156,140,251,.6)}
+.tr.vl.cur{background:linear-gradient(90deg,rgba(156,140,251,.14),rgba(156,140,251,.025))}
+.tr.vl.cur .dot{background:var(--violet);border-color:var(--violet);
+                box-shadow:0 0 0 4px var(--bg),0 0 12px rgba(156,140,251,.7)}
+
+.prog{position:absolute;left:22px;right:10px;bottom:4px;height:2px;border-radius:2px;
+      background:rgba(255,255,255,.07);display:none}
+.tr.cur .prog{display:block}
+.prog i{display:block;height:100%;width:0;border-radius:2px;background:var(--mint);
+        transition:width 1s linear}
+.tr.vl.cur .prog i{background:var(--violet)}
+
+/* Sunrise is a boundary, so it gets a boundary's weight: a node, not a row. */
+.sun{position:relative;display:grid;grid-template-columns:22px 1fr;align-items:center;
+     column-gap:8px;padding:2px 10px 4px 0}
+.sdot{justify-self:center;width:5px;height:5px;border-radius:50%;background:var(--bg);
+      border:1px solid rgba(255,255,255,.3);box-shadow:0 0 0 3px var(--bg)}
+.stx{font-size:11px;font-weight:500;color:var(--tx-3)}
+.stx b{font-weight:600;color:var(--tx-2)}
+
+footer{margin-top:auto;padding-top:7px;text-align:center;font-size:10.5px;
+       font-weight:500;color:var(--tx-3);letter-spacing:.01em}
+
+/* Only reachable if the built-in snapshot is broken too. Say it plainly and
+   keep retrying; never an empty screen. */
+.fail-t{margin-top:5px;font-size:14px;font-weight:500;color:var(--tx-2)}
+.nodata .hero,.nodata .now,.nodata .tl{display:none}
+
+@media (max-width:360px){
+  /* the violet dot and rail already say "voluntary"; the label is what pushes
+     Teheccüd into an ellipsis on a 320px phone, so it goes first */
+  .tag.vl{display:none}
+}
+@media (max-width:344px){
+  .nm{font-size:14.5px}
+  .t2{font-size:11px}
+  .rg{font-size:13px}
+  .nw-name .nm{font-size:17.5px}
+}
+
+@keyframes rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+.anim .top{animation:rise .55s both cubic-bezier(.22,.8,.2,1)}
+.anim .hero{animation:rise .55s .05s both cubic-bezier(.22,.8,.2,1)}
+.anim .now{animation:rise .55s .11s both cubic-bezier(.22,.8,.2,1)}
+.anim .tl{animation:rise .55s .17s both cubic-bezier(.22,.8,.2,1)}
+.anim footer{animation:rise .55s .23s both cubic-bezier(.22,.8,.2,1)}
+
+@media (prefers-reduced-motion:reduce){
+  *,*:before,*:after{animation:none !important;transition:none !important}
+}
+</style>
+</head>
+
+<body>
+<div class="bg" aria-hidden="true"></div>
+
+<main class="wrap" id="app">
+
+  <header class="top">
+    <div class="date" id="dDate">&nbsp;</div>
+    <div class="clock" id="dClock">--:--</div>
+    <div class="place">Moscheea El-Feth · Tilburg</div>
+    <div class="tzn">ora Olandei</div>
+  </header>
+
+  <section class="hero">
+    <div class="dial">
+      <svg viewBox="0 0 220 220" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="arcg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#31D6A8"/>
+            <stop offset="55%" stop-color="#3FC8C4"/>
+            <stop offset="100%" stop-color="#4FA9F2"/>
+          </linearGradient>
+        </defs>
+        <g transform="rotate(-90 110 110)">
+          <circle class="sec" id="secArc" cx="110" cy="110" r="105"/>
+          <circle class="trk" cx="110" cy="110" r="94"/>
+          <circle class="arc" id="arc" cx="110" cy="110" r="94" stroke="url(#arcg)"/>
+        </g>
+        <circle class="head" id="head" cx="110" cy="16" r="4.5"/>
+      </svg>
+      <div class="face">
+        <div class="eyebrow">Următorul adhan</div>
+        <div class="nx"><span class="nx-n" id="nxName">—</span><span class="nx-t" id="nxTr"></span></div>
+        <div class="cd" id="cd" role="timer" aria-live="off">--:--</div>
+        <div class="cd-sub" id="cdSub">&nbsp;</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card now" id="nowCard">
+    <div class="l1">
+      <span class="eyebrow" id="nwLabel">Deschis acum</span>
+      <span class="rem" id="nwRem"></span>
+    </div>
+    <div class="nw-name"><span class="nm" id="nwName">—</span><span class="t2" id="nwTr"></span></div>
+    <div class="bar"><i id="nwBar"></i></div>
+    <div class="ends"><span id="nwFrom">--:--</span><span id="nwTo">--:--</span></div>
+    <div class="chip" id="nwChip" hidden></div>
+  </section>
+
+  <section class="tl">
+    <div class="tl-head"><span class="eyebrow">Programul zilei</span></div>
+    <div class="rows" id="rows"></div>
+  </section>
+
+  <section class="card fail" id="fail" hidden>
+    <div class="eyebrow">Orarul nu s-a încărcat</div>
+    <div class="fail-t">Se reîncearcă automat.</div>
+  </section>
+
+  <footer id="foot">Stedekestraat 27, Tilburg</footer>
+</main>
+
+<!-- Last-resort copy of times.json, inlined at build time. The fetched file
+     always wins; this only exists so that a cold start with no network and an
+     evicted Cache Storage (iOS does evict) still shows a correct day instead of
+     an apology. Regenerate together with times.json. -->
+<script type="application/json" id="snapshot">{"place":"Tilburg, Nederland","mosque":"Moscheea El-Feth","timeZone":"Europe/Amsterdam","sourceYear":2026,"generated":"2026-09-22","note":"minutes after 00:00 UTC on the given calendar day; the app adds them to UTC midnight and renders the instant in Europe/Amsterdam, so the clock times stay correct in any year whatever date daylight saving moves to. src: f = mosque feed (el-feth.nl), p = printed mosque calendar (wins over the feed), m = mawaqit, c = interpolated. Generated by data/build-times.js — do not edit by hand.","days":{"01-01":{"fajr":383,"sunrise":468,"dhuhr":703,"asr":808,"maghrib":939,"isha":1049,"src":"f"},"01-02":{"fajr":383,"sunrise":468,"dhuhr":703,"asr":809,"maghrib":941,"isha":1051,"src":"f"},"01-03":{"fajr":383,"sunrise":468,"dhuhr":704,"asr":810,"maghrib":942,"isha":1052,"src":"f"},"01-04":{"fajr":382,"sunrise":467,"dhuhr":704,"asr":812,"maghrib":943,"isha":1052,"src":"f"},"01-05":{"fajr":382,"sunrise":467,"dhuhr":705,"asr":813,"maghrib":944,"isha":1053,"src":"f"},"01-06":{"fajr":382,"sunrise":467,"dhuhr":706,"asr":814,"maghrib":945,"isha":1055,"src":"f"},"01-07":{"fajr":381,"sunrise":466,"dhuhr":707,"asr":815,"maghrib":947,"isha":1057,"src":"f"},"01-08":{"fajr":381,"sunrise":466,"dhuhr":707,"asr":816,"maghrib":948,"isha":1058,"src":"f"},"01-09":{"fajr":380,"sunrise":465,"dhuhr":707,"asr":817,"maghrib":950,"isha":1058,"src":"f"},"01-10":{"fajr":380,"sunrise":465,"dhuhr":707,"asr":819,"maghrib":951,"isha":1059,"src":"f"},"01-11":{"fajr":379,"sunrise":464,"dhuhr":708,"asr":821,"maghrib":952,"isha":1061,"src":"f"},"01-12":{"fajr":378,"sunrise":463,"dhuhr":708,"asr":822,"maghrib":954,"isha":1062,"src":"f"},"01-13":{"fajr":378,"sunrise":463,"dhuhr":708,"asr":823,"maghrib":955,"isha":1063,"src":"f"},"01-14":{"fajr":377,"sunrise":462,"dhuhr":708,"asr":824,"maghrib":957,"isha":1064,"src":"f"},"01-15":{"fajr":376,"sunrise":461,"dhuhr":709,"asr":826,"maghrib":959,"isha":1066,"src":"f"},"01-16":{"fajr":375,"sunrise":460,"dhuhr":709,"asr":827,"maghrib":960,"isha":1067,"src":"f"},"01-17":{"fajr":374,"sunrise":459,"dhuhr":710,"asr":828,"maghrib":962,"isha":1069,"src":"f"},"01-18":{"fajr":373,"sunrise":458,"dhuhr":710,"asr":829,"maghrib":963,"isha":1071,"src":"f"},"01-19":{"fajr":372,"sunrise":457,"dhuhr":710,"asr":831,"maghrib":965,"isha":1073,"src":"f"},"01-20":{"fajr":371,"sunrise":456,"dhuhr":710,"asr":833,"maghrib":967,"isha":1075,"src":"f"},"01-21":{"fajr":370,"sunrise":455,"dhuhr":711,"asr":834,"maghrib":968,"isha":1077,"src":"f"},"01-22":{"fajr":369,"sunrise":454,"dhuhr":711,"asr":836,"maghrib":970,"isha":1078,"src":"f"},"01-23":{"fajr":367,"sunrise":452,"dhuhr":711,"asr":837,"maghrib":972,"isha":1079,"src":"f"},"01-24":{"fajr":366,"sunrise":451,"dhuhr":712,"asr":838,"maghrib":974,"isha":1080,"src":"f"},"01-25":{"fajr":365,"sunrise":450,"dhuhr":712,"asr":839,"maghrib":975,"isha":1081,"src":"f"},"01-26":{"fajr":363,"sunrise":448,"dhuhr":712,"asr":841,"maghrib":977,"isha":1082,"src":"f"},"01-27":{"fajr":362,"sunrise":447,"dhuhr":713,"asr":840,"maghrib":979,"isha":1083,"src":"f"},"01-28":{"fajr":361,"sunrise":446,"dhuhr":713,"asr":843,"maghrib":981,"isha":1083,"src":"f"},"01-29":{"fajr":359,"sunrise":444,"dhuhr":713,"asr":845,"maghrib":983,"isha":1084,"src":"f"},"01-30":{"fajr":358,"sunrise":443,"dhuhr":713,"asr":846,"maghrib":985,"isha":1085,"src":"f"},"01-31":{"fajr":356,"sunrise":441,"dhuhr":713,"asr":847,"maghrib":986,"isha":1085,"src":"f"},"02-01":{"fajr":355,"sunrise":440,"dhuhr":714,"asr":849,"maghrib":988,"isha":1087,"src":"f"},"02-02":{"fajr":353,"sunrise":438,"dhuhr":714,"asr":850,"maghrib":990,"isha":1089,"src":"f"},"02-03":{"fajr":351,"sunrise":436,"dhuhr":714,"asr":851,"maghrib":992,"isha":1091,"src":"f"},"02-04":{"fajr":350,"sunrise":435,"dhuhr":714,"asr":853,"maghrib":994,"isha":1092,"src":"f"},"02-05":{"fajr":348,"sunrise":433,"dhuhr":714,"asr":855,"maghrib":996,"isha":1094,"src":"f"},"02-06":{"fajr":346,"sunrise":431,"dhuhr":714,"asr":857,"maghrib":998,"isha":1096,"src":"f"},"02-07":{"fajr":345,"sunrise":430,"dhuhr":714,"asr":858,"maghrib":999,"isha":1098,"src":"f"},"02-08":{"fajr":343,"sunrise":428,"dhuhr":714,"asr":860,"maghrib":1001,"isha":1099,"src":"f"},"02-09":{"fajr":341,"sunrise":426,"dhuhr":714,"asr":862,"maghrib":1003,"isha":1101,"src":"f"},"02-10":{"fajr":339,"sunrise":424,"dhuhr":714,"asr":863,"maghrib":1005,"isha":1103,"src":"f"},"02-11":{"fajr":337,"sunrise":422,"dhuhr":714,"asr":864,"maghrib":1007,"isha":1105,"src":"f"},"02-12":{"fajr":335,"sunrise":420,"dhuhr":714,"asr":866,"maghrib":1009,"isha":1106,"src":"f"},"02-13":{"fajr":333,"sunrise":418,"dhuhr":714,"asr":867,"maghrib":1011,"isha":1107,"src":"f"},"02-14":{"fajr":332,"sunrise":417,"dhuhr":714,"asr":869,"maghrib":1012,"isha":1109,"src":"f"},"02-15":{"fajr":330,"sunrise":415,"dhuhr":714,"asr":870,"maghrib":1014,"isha":1111,"src":"f"},"02-16":{"fajr":328,"sunrise":413,"dhuhr":714,"asr":871,"maghrib":1016,"isha":1112,"src":"f"},"02-17":{"fajr":326,"sunrise":411,"dhuhr":713,"asr":872,"maghrib":1018,"isha":1114,"src":"f"},"02-18":{"fajr":324,"sunrise":409,"dhuhr":713,"asr":874,"maghrib":1020,"isha":1116,"src":"f"},"02-19":{"fajr":322,"sunrise":407,"dhuhr":713,"asr":876,"maghrib":1022,"isha":1117,"src":"f"},"02-20":{"fajr":320,"sunrise":405,"dhuhr":713,"asr":877,"maghrib":1024,"isha":1118,"src":"f"},"02-21":{"fajr":318,"sunrise":403,"dhuhr":713,"asr":879,"maghrib":1025,"isha":1120,"src":"f"},"02-22":{"fajr":315,"sunrise":400,"dhuhr":713,"asr":880,"maghrib":1027,"isha":1121,"src":"f"},"02-23":{"fajr":313,"sunrise":398,"dhuhr":713,"asr":881,"maghrib":1029,"isha":1122,"src":"f"},"02-24":{"fajr":311,"sunrise":396,"dhuhr":713,"asr":882,"maghrib":1031,"isha":1124,"src":"f"},"02-25":{"fajr":309,"sunrise":394,"dhuhr":713,"asr":884,"maghrib":1033,"isha":1126,"src":"f"},"02-26":{"fajr":307,"sunrise":392,"dhuhr":713,"asr":886,"maghrib":1035,"isha":1128,"src":"f"},"02-27":{"fajr":305,"sunrise":390,"dhuhr":713,"asr":887,"maghrib":1036,"isha":1130,"src":"f"},"02-28":{"fajr":303,"sunrise":388,"dhuhr":713,"asr":889,"maghrib":1038,"isha":1131,"src":"f"},"03-01":{"fajr":300,"sunrise":385,"dhuhr":712,"asr":890,"maghrib":1040,"isha":1132,"src":"f"},"03-02":{"fajr":298,"sunrise":383,"dhuhr":712,"asr":891,"maghrib":1042,"isha":1132,"src":"f"},"03-03":{"fajr":296,"sunrise":381,"dhuhr":712,"asr":892,"maghrib":1044,"isha":1133,"src":"f"},"03-04":{"fajr":294,"sunrise":379,"dhuhr":712,"asr":894,"maghrib":1045,"isha":1134,"src":"f"},"03-05":{"fajr":292,"sunrise":377,"dhuhr":712,"asr":895,"maghrib":1047,"isha":1136,"src":"f"},"03-06":{"fajr":289,"sunrise":374,"dhuhr":712,"asr":896,"maghrib":1049,"isha":1138,"src":"f"},"03-07":{"fajr":287,"sunrise":372,"dhuhr":711,"asr":897,"maghrib":1051,"isha":1140,"src":"f"},"03-08":{"fajr":285,"sunrise":370,"dhuhr":711,"asr":899,"maghrib":1052,"isha":1142,"src":"f"},"03-09":{"fajr":283,"sunrise":368,"dhuhr":711,"asr":900,"maghrib":1054,"isha":1143,"src":"f"},"03-10":{"fajr":280,"sunrise":365,"dhuhr":710,"asr":901,"maghrib":1056,"isha":1144,"src":"f"},"03-11":{"fajr":278,"sunrise":363,"dhuhr":710,"asr":902,"maghrib":1058,"isha":1146,"src":"f"},"03-12":{"fajr":276,"sunrise":361,"dhuhr":710,"asr":903,"maghrib":1060,"isha":1148,"src":"f"},"03-13":{"fajr":273,"sunrise":358,"dhuhr":709,"asr":904,"maghrib":1061,"isha":1150,"src":"f"},"03-14":{"fajr":271,"sunrise":356,"dhuhr":709,"asr":905,"maghrib":1063,"isha":1151,"src":"f"},"03-15":{"fajr":269,"sunrise":354,"dhuhr":708,"asr":907,"maghrib":1065,"isha":1153,"src":"f"},"03-16":{"fajr":267,"sunrise":352,"dhuhr":708,"asr":908,"maghrib":1067,"isha":1155,"src":"f"},"03-17":{"fajr":264,"sunrise":349,"dhuhr":708,"asr":909,"maghrib":1068,"isha":1156,"src":"f"},"03-18":{"fajr":262,"sunrise":347,"dhuhr":708,"asr":910,"maghrib":1070,"isha":1159,"src":"f"},"03-19":{"fajr":260,"sunrise":345,"dhuhr":707,"asr":912,"maghrib":1072,"isha":1161,"src":"f"},"03-20":{"fajr":257,"sunrise":342,"dhuhr":707,"asr":913,"maghrib":1073,"isha":1163,"src":"f"},"03-21":{"fajr":255,"sunrise":340,"dhuhr":707,"asr":914,"maghrib":1075,"isha":1166,"src":"f"},"03-22":{"fajr":253,"sunrise":338,"dhuhr":707,"asr":915,"maghrib":1077,"isha":1168,"src":"f"},"03-23":{"fajr":250,"sunrise":335,"dhuhr":706,"asr":916,"maghrib":1079,"isha":1170,"src":"f"},"03-24":{"fajr":248,"sunrise":333,"dhuhr":706,"asr":918,"maghrib":1080,"isha":1173,"src":"f"},"03-25":{"fajr":246,"sunrise":331,"dhuhr":706,"asr":919,"maghrib":1082,"isha":1175,"src":"f"},"03-26":{"fajr":243,"sunrise":328,"dhuhr":706,"asr":920,"maghrib":1084,"isha":1176,"src":"f"},"03-27":{"fajr":241,"sunrise":326,"dhuhr":705,"asr":921,"maghrib":1085,"isha":1178,"src":"f"},"03-28":{"fajr":239,"sunrise":324,"dhuhr":705,"asr":921,"maghrib":1087,"isha":1180,"src":"f"},"03-29":{"fajr":236,"sunrise":321,"dhuhr":705,"asr":922,"maghrib":1089,"isha":1182,"src":"f"},"03-30":{"fajr":234,"sunrise":319,"dhuhr":705,"asr":923,"maghrib":1091,"isha":1184,"src":"f"},"03-31":{"fajr":232,"sunrise":317,"dhuhr":704,"asr":925,"maghrib":1092,"isha":1186,"src":"f"},"04-01":{"fajr":230,"sunrise":315,"dhuhr":704,"asr":926,"maghrib":1094,"isha":1188,"src":"f"},"04-02":{"fajr":227,"sunrise":312,"dhuhr":704,"asr":926,"maghrib":1096,"isha":1189,"src":"f"},"04-03":{"fajr":225,"sunrise":310,"dhuhr":703,"asr":927,"maghrib":1097,"isha":1190,"src":"f"},"04-04":{"fajr":223,"sunrise":308,"dhuhr":703,"asr":928,"maghrib":1099,"isha":1191,"src":"f"},"04-05":{"fajr":220,"sunrise":305,"dhuhr":703,"asr":928,"maghrib":1101,"isha":1193,"src":"f"},"04-06":{"fajr":218,"sunrise":303,"dhuhr":702,"asr":929,"maghrib":1103,"isha":1194,"src":"f"},"04-07":{"fajr":216,"sunrise":301,"dhuhr":702,"asr":930,"maghrib":1104,"isha":1196,"src":"f"},"04-08":{"fajr":214,"sunrise":299,"dhuhr":702,"asr":931,"maghrib":1106,"isha":1197,"src":"f"},"04-09":{"fajr":211,"sunrise":296,"dhuhr":701,"asr":931,"maghrib":1108,"isha":1199,"src":"f"},"04-10":{"fajr":209,"sunrise":294,"dhuhr":701,"asr":932,"maghrib":1109,"isha":1200,"src":"f"},"04-11":{"fajr":207,"sunrise":292,"dhuhr":701,"asr":932,"maghrib":1111,"isha":1201,"src":"f"},"04-12":{"fajr":205,"sunrise":290,"dhuhr":701,"asr":933,"maghrib":1113,"isha":1202,"src":"f"},"04-13":{"fajr":202,"sunrise":287,"dhuhr":700,"asr":934,"maghrib":1115,"isha":1204,"src":"f"},"04-14":{"fajr":200,"sunrise":285,"dhuhr":700,"asr":935,"maghrib":1116,"isha":1206,"src":"f"},"04-15":{"fajr":198,"sunrise":283,"dhuhr":700,"asr":936,"maghrib":1118,"isha":1208,"src":"f"},"04-16":{"fajr":196,"sunrise":281,"dhuhr":700,"asr":936,"maghrib":1120,"isha":1209,"src":"f"},"04-17":{"fajr":194,"sunrise":279,"dhuhr":699,"asr":937,"maghrib":1121,"isha":1210,"src":"f"},"04-18":{"fajr":192,"sunrise":277,"dhuhr":699,"asr":937,"maghrib":1123,"isha":1212,"src":"f"},"04-19":{"fajr":189,"sunrise":274,"dhuhr":699,"asr":938,"maghrib":1125,"isha":1214,"src":"f"},"04-20":{"fajr":187,"sunrise":272,"dhuhr":699,"asr":939,"maghrib":1127,"isha":1215,"src":"f"},"04-21":{"fajr":185,"sunrise":270,"dhuhr":699,"asr":940,"maghrib":1128,"isha":1216,"src":"f"},"04-22":{"fajr":183,"sunrise":268,"dhuhr":698,"asr":941,"maghrib":1130,"isha":1218,"src":"f"},"04-23":{"fajr":181,"sunrise":266,"dhuhr":698,"asr":941,"maghrib":1132,"isha":1220,"src":"f"},"04-24":{"fajr":179,"sunrise":264,"dhuhr":698,"asr":942,"maghrib":1133,"isha":1221,"src":"f"},"04-25":{"fajr":177,"sunrise":262,"dhuhr":698,"asr":943,"maghrib":1135,"isha":1223,"src":"f"},"04-26":{"fajr":175,"sunrise":260,"dhuhr":698,"asr":944,"maghrib":1137,"isha":1225,"src":"f"},"04-27":{"fajr":173,"sunrise":258,"dhuhr":697,"asr":944,"maghrib":1138,"isha":1227,"src":"f"},"04-28":{"fajr":171,"sunrise":256,"dhuhr":697,"asr":945,"maghrib":1140,"isha":1229,"src":"f"},"04-29":{"fajr":169,"sunrise":254,"dhuhr":697,"asr":946,"maghrib":1142,"isha":1230,"src":"f"},"04-30":{"fajr":167,"sunrise":252,"dhuhr":697,"asr":947,"maghrib":1143,"isha":1232,"src":"f"},"05-01":{"fajr":165,"sunrise":250,"dhuhr":697,"asr":948,"maghrib":1145,"isha":1234,"src":"f"},"05-02":{"fajr":163,"sunrise":248,"dhuhr":697,"asr":948,"maghrib":1147,"isha":1235,"src":"f"},"05-03":{"fajr":161,"sunrise":246,"dhuhr":697,"asr":948,"maghrib":1148,"isha":1236,"src":"f"},"05-04":{"fajr":159,"sunrise":244,"dhuhr":697,"asr":948,"maghrib":1150,"isha":1238,"src":"f"},"05-05":{"fajr":158,"sunrise":243,"dhuhr":697,"asr":949,"maghrib":1152,"isha":1239,"src":"f"},"05-06":{"fajr":156,"sunrise":241,"dhuhr":697,"asr":949,"maghrib":1153,"isha":1241,"src":"f"},"05-07":{"fajr":154,"sunrise":239,"dhuhr":697,"asr":949,"maghrib":1155,"isha":1243,"src":"f"},"05-08":{"fajr":152,"sunrise":237,"dhuhr":696,"asr":950,"maghrib":1157,"isha":1244,"src":"f"},"05-09":{"fajr":151,"sunrise":236,"dhuhr":696,"asr":950,"maghrib":1158,"isha":1246,"src":"f"},"05-10":{"fajr":149,"sunrise":234,"dhuhr":696,"asr":950,"maghrib":1160,"isha":1247,"src":"f"},"05-11":{"fajr":147,"sunrise":232,"dhuhr":696,"asr":951,"maghrib":1162,"isha":1248,"src":"f"},"05-12":{"fajr":146,"sunrise":231,"dhuhr":696,"asr":951,"maghrib":1163,"isha":1250,"src":"f"},"05-13":{"fajr":144,"sunrise":229,"dhuhr":696,"asr":951,"maghrib":1165,"isha":1251,"src":"f"},"05-14":{"fajr":142,"sunrise":227,"dhuhr":696,"asr":951,"maghrib":1166,"isha":1253,"src":"f"},"05-15":{"fajr":141,"sunrise":226,"dhuhr":696,"asr":952,"maghrib":1168,"isha":1255,"src":"f"},"05-16":{"fajr":139,"sunrise":224,"dhuhr":696,"asr":952,"maghrib":1169,"isha":1256,"src":"f"},"05-17":{"fajr":138,"sunrise":223,"dhuhr":696,"asr":953,"maghrib":1171,"isha":1258,"src":"f"},"05-18":{"fajr":137,"sunrise":222,"dhuhr":696,"asr":954,"maghrib":1172,"isha":1259,"src":"f"},"05-19":{"fajr":135,"sunrise":220,"dhuhr":696,"asr":955,"maghrib":1174,"isha":1261,"src":"f"},"05-20":{"fajr":134,"sunrise":219,"dhuhr":696,"asr":955,"maghrib":1175,"isha":1262,"src":"f"},"05-21":{"fajr":133,"sunrise":218,"dhuhr":697,"asr":956,"maghrib":1177,"isha":1263,"src":"f"},"05-22":{"fajr":131,"sunrise":216,"dhuhr":697,"asr":956,"maghrib":1178,"isha":1265,"src":"f"},"05-23":{"fajr":130,"sunrise":215,"dhuhr":697,"asr":956,"maghrib":1179,"isha":1266,"src":"f"},"05-24":{"fajr":129,"sunrise":214,"dhuhr":697,"asr":957,"maghrib":1181,"isha":1268,"src":"f"},"05-25":{"fajr":128,"sunrise":213,"dhuhr":697,"asr":957,"maghrib":1182,"isha":1269,"src":"f"},"05-26":{"fajr":127,"sunrise":212,"dhuhr":697,"asr":957,"maghrib":1183,"isha":1270,"src":"f"},"05-27":{"fajr":125,"sunrise":210,"dhuhr":697,"asr":958,"maghrib":1185,"isha":1272,"src":"f"},"05-28":{"fajr":124,"sunrise":209,"dhuhr":697,"asr":958,"maghrib":1186,"isha":1273,"src":"f"},"05-29":{"fajr":124,"sunrise":209,"dhuhr":697,"asr":958,"maghrib":1187,"isha":1274,"src":"f"},"05-30":{"fajr":123,"sunrise":208,"dhuhr":698,"asr":959,"maghrib":1188,"isha":1275,"src":"f"},"05-31":{"fajr":122,"sunrise":207,"dhuhr":698,"asr":959,"maghrib":1189,"isha":1277,"src":"f"},"06-01":{"fajr":121,"sunrise":206,"dhuhr":698,"asr":959,"maghrib":1191,"isha":1278,"src":"f"},"06-02":{"fajr":120,"sunrise":205,"dhuhr":698,"asr":959,"maghrib":1192,"isha":1278,"src":"f"},"06-03":{"fajr":119,"sunrise":204,"dhuhr":698,"asr":959,"maghrib":1193,"isha":1279,"src":"f"},"06-04":{"fajr":119,"sunrise":204,"dhuhr":698,"asr":959,"maghrib":1194,"isha":1280,"src":"f"},"06-05":{"fajr":118,"sunrise":203,"dhuhr":698,"asr":959,"maghrib":1195,"isha":1281,"src":"f"},"06-06":{"fajr":117,"sunrise":202,"dhuhr":699,"asr":960,"maghrib":1196,"isha":1282,"src":"f"},"06-07":{"fajr":117,"sunrise":202,"dhuhr":699,"asr":960,"maghrib":1196,"isha":1283,"src":"f"},"06-08":{"fajr":116,"sunrise":201,"dhuhr":699,"asr":961,"maghrib":1197,"isha":1284,"src":"f"},"06-09":{"fajr":116,"sunrise":201,"dhuhr":699,"asr":961,"maghrib":1198,"isha":1285,"src":"f"},"06-10":{"fajr":116,"sunrise":201,"dhuhr":699,"asr":961,"maghrib":1199,"isha":1286,"src":"f"},"06-11":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":962,"maghrib":1199,"isha":1286,"src":"f"},"06-12":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":962,"maghrib":1200,"isha":1287,"src":"f"},"06-13":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":962,"maghrib":1201,"isha":1288,"src":"f"},"06-14":{"fajr":115,"sunrise":200,"dhuhr":700,"asr":963,"maghrib":1201,"isha":1288,"src":"f"},"06-15":{"fajr":114,"sunrise":199,"dhuhr":700,"asr":963,"maghrib":1202,"isha":1289,"src":"f"},"06-16":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":963,"maghrib":1202,"isha":1289,"src":"f"},"06-17":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":964,"maghrib":1203,"isha":1290,"src":"f"},"06-18":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":964,"maghrib":1203,"isha":1290,"src":"f"},"06-19":{"fajr":114,"sunrise":199,"dhuhr":701,"asr":964,"maghrib":1203,"isha":1291,"src":"f"},"06-20":{"fajr":115,"sunrise":200,"dhuhr":701,"asr":964,"maghrib":1204,"isha":1291,"src":"f"},"06-21":{"fajr":115,"sunrise":200,"dhuhr":701,"asr":965,"maghrib":1204,"isha":1291,"src":"f"},"06-22":{"fajr":115,"sunrise":200,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1291,"src":"f"},"06-23":{"fajr":115,"sunrise":200,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-24":{"fajr":116,"sunrise":201,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-25":{"fajr":116,"sunrise":201,"dhuhr":702,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-26":{"fajr":117,"sunrise":202,"dhuhr":703,"asr":965,"maghrib":1204,"isha":1292,"src":"f"},"06-27":{"fajr":117,"sunrise":202,"dhuhr":703,"asr":966,"maghrib":1204,"isha":1292,"src":"f"},"06-28":{"fajr":118,"sunrise":203,"dhuhr":703,"asr":966,"maghrib":1204,"isha":1291,"src":"f"},"06-29":{"fajr":118,"sunrise":203,"dhuhr":703,"asr":966,"maghrib":1204,"isha":1291,"src":"f"},"06-30":{"fajr":119,"sunrise":204,"dhuhr":704,"asr":966,"maghrib":1203,"isha":1291,"src":"f"},"07-01":{"fajr":120,"sunrise":205,"dhuhr":704,"asr":966,"maghrib":1203,"isha":1291,"src":"f"},"07-02":{"fajr":120,"sunrise":205,"dhuhr":704,"asr":966,"maghrib":1203,"isha":1291,"src":"f"},"07-03":{"fajr":121,"sunrise":206,"dhuhr":704,"asr":966,"maghrib":1202,"isha":1291,"src":"f"},"07-04":{"fajr":122,"sunrise":207,"dhuhr":704,"asr":966,"maghrib":1202,"isha":1291,"src":"f"},"07-05":{"fajr":123,"sunrise":208,"dhuhr":704,"asr":966,"maghrib":1201,"isha":1291,"src":"f"},"07-06":{"fajr":124,"sunrise":209,"dhuhr":704,"asr":966,"maghrib":1201,"isha":1290,"src":"f"},"07-07":{"fajr":125,"sunrise":210,"dhuhr":704,"asr":966,"maghrib":1200,"isha":1290,"src":"f"},"07-08":{"fajr":125,"sunrise":210,"dhuhr":705,"asr":966,"maghrib":1199,"isha":1289,"src":"f"},"07-09":{"fajr":126,"sunrise":211,"dhuhr":705,"asr":966,"maghrib":1199,"isha":1289,"src":"f"},"07-10":{"fajr":128,"sunrise":213,"dhuhr":705,"asr":966,"maghrib":1198,"isha":1288,"src":"f"},"07-11":{"fajr":129,"sunrise":214,"dhuhr":705,"asr":965,"maghrib":1197,"isha":1288,"src":"f"},"07-12":{"fajr":130,"sunrise":215,"dhuhr":705,"asr":965,"maghrib":1196,"isha":1287,"src":"f"},"07-13":{"fajr":131,"sunrise":216,"dhuhr":705,"asr":965,"maghrib":1195,"isha":1286,"src":"f"},"07-14":{"fajr":132,"sunrise":217,"dhuhr":706,"asr":965,"maghrib":1194,"isha":1285,"src":"f"},"07-15":{"fajr":133,"sunrise":218,"dhuhr":706,"asr":965,"maghrib":1193,"isha":1285,"src":"f"},"07-16":{"fajr":134,"sunrise":219,"dhuhr":706,"asr":964,"maghrib":1192,"isha":1284,"src":"f"},"07-17":{"fajr":136,"sunrise":221,"dhuhr":706,"asr":964,"maghrib":1191,"isha":1283,"src":"f"},"07-18":{"fajr":137,"sunrise":222,"dhuhr":706,"asr":964,"maghrib":1190,"isha":1282,"src":"f"},"07-19":{"fajr":138,"sunrise":223,"dhuhr":706,"asr":963,"maghrib":1189,"isha":1281,"src":"f"},"07-20":{"fajr":140,"sunrise":225,"dhuhr":706,"asr":963,"maghrib":1187,"isha":1279,"src":"f"},"07-21":{"fajr":141,"sunrise":226,"dhuhr":706,"asr":963,"maghrib":1186,"isha":1277,"src":"f"},"07-22":{"fajr":142,"sunrise":227,"dhuhr":707,"asr":962,"maghrib":1185,"isha":1276,"src":"f"},"07-23":{"fajr":144,"sunrise":229,"dhuhr":707,"asr":962,"maghrib":1183,"isha":1275,"src":"f"},"07-24":{"fajr":145,"sunrise":230,"dhuhr":707,"asr":961,"maghrib":1182,"isha":1273,"src":"f"},"07-25":{"fajr":147,"sunrise":232,"dhuhr":707,"asr":961,"maghrib":1181,"isha":1272,"src":"f"},"07-26":{"fajr":148,"sunrise":233,"dhuhr":707,"asr":960,"maghrib":1179,"isha":1271,"src":"f"},"07-27":{"fajr":150,"sunrise":235,"dhuhr":707,"asr":960,"maghrib":1178,"isha":1269,"src":"f"},"07-28":{"fajr":151,"sunrise":236,"dhuhr":707,"asr":959,"maghrib":1176,"isha":1268,"src":"f"},"07-29":{"fajr":153,"sunrise":238,"dhuhr":707,"asr":959,"maghrib":1174,"isha":1266,"src":"f"},"07-30":{"fajr":154,"sunrise":239,"dhuhr":707,"asr":958,"maghrib":1173,"isha":1265,"src":"f"},"07-31":{"fajr":156,"sunrise":241,"dhuhr":706,"asr":957,"maghrib":1171,"isha":1263,"src":"f"},"08-01":{"fajr":157,"sunrise":242,"dhuhr":706,"asr":957,"maghrib":1170,"isha":1261,"src":"f"},"08-02":{"fajr":159,"sunrise":244,"dhuhr":704,"asr":956,"maghrib":1168,"isha":1260,"src":"f"},"08-03":{"fajr":160,"sunrise":245,"dhuhr":704,"asr":955,"maghrib":1166,"isha":1258,"src":"f"},"08-04":{"fajr":162,"sunrise":247,"dhuhr":704,"asr":954,"maghrib":1164,"isha":1257,"src":"f"},"08-05":{"fajr":163,"sunrise":248,"dhuhr":703,"asr":952,"maghrib":1163,"isha":1255,"src":"f"},"08-06":{"fajr":165,"sunrise":250,"dhuhr":703,"asr":950,"maghrib":1161,"isha":1253,"src":"f"},"08-07":{"fajr":166,"sunrise":251,"dhuhr":703,"asr":948,"maghrib":1159,"isha":1251,"src":"f"},"08-08":{"fajr":168,"sunrise":253,"dhuhr":703,"asr":946,"maghrib":1157,"isha":1249,"src":"f"},"08-09":{"fajr":170,"sunrise":255,"dhuhr":703,"asr":945,"maghrib":1155,"isha":1248,"src":"f"},"08-10":{"fajr":171,"sunrise":256,"dhuhr":703,"asr":944,"maghrib":1153,"isha":1246,"src":"f"},"08-11":{"fajr":173,"sunrise":258,"dhuhr":703,"asr":943,"maghrib":1151,"isha":1244,"src":"f"},"08-12":{"fajr":174,"sunrise":259,"dhuhr":702,"asr":942,"maghrib":1149,"isha":1242,"src":"f"},"08-13":{"fajr":176,"sunrise":261,"dhuhr":702,"asr":940,"maghrib":1147,"isha":1240,"src":"f"},"08-14":{"fajr":178,"sunrise":263,"dhuhr":702,"asr":939,"maghrib":1145,"isha":1238,"src":"f"},"08-15":{"fajr":179,"sunrise":264,"dhuhr":702,"asr":938,"maghrib":1143,"isha":1236,"src":"f"},"08-16":{"fajr":181,"sunrise":266,"dhuhr":702,"asr":937,"maghrib":1141,"isha":1234,"src":"f"},"08-17":{"fajr":183,"sunrise":268,"dhuhr":702,"asr":936,"maghrib":1139,"isha":1232,"src":"f"},"08-18":{"fajr":184,"sunrise":269,"dhuhr":702,"asr":935,"maghrib":1137,"isha":1230,"src":"f"},"08-19":{"fajr":186,"sunrise":271,"dhuhr":701,"asr":934,"maghrib":1135,"isha":1228,"src":"f"},"08-20":{"fajr":187,"sunrise":272,"dhuhr":701,"asr":932,"maghrib":1133,"isha":1226,"src":"f"},"08-21":{"fajr":189,"sunrise":274,"dhuhr":701,"asr":931,"maghrib":1131,"isha":1224,"src":"f"},"08-22":{"fajr":191,"sunrise":276,"dhuhr":701,"asr":931,"maghrib":1129,"isha":1222,"src":"f"},"08-23":{"fajr":192,"sunrise":277,"dhuhr":701,"asr":930,"maghrib":1127,"isha":1220,"src":"f"},"08-24":{"fajr":194,"sunrise":279,"dhuhr":701,"asr":929,"maghrib":1125,"isha":1218,"src":"f"},"08-25":{"fajr":196,"sunrise":281,"dhuhr":701,"asr":928,"maghrib":1122,"isha":1216,"src":"f"},"08-26":{"fajr":197,"sunrise":282,"dhuhr":700,"asr":927,"maghrib":1120,"isha":1213,"src":"f"},"08-27":{"fajr":199,"sunrise":284,"dhuhr":700,"asr":926,"maghrib":1118,"isha":1211,"src":"f"},"08-28":{"fajr":201,"sunrise":286,"dhuhr":700,"asr":924,"maghrib":1116,"isha":1209,"src":"f"},"08-29":{"fajr":202,"sunrise":287,"dhuhr":700,"asr":923,"maghrib":1113,"isha":1207,"src":"f"},"08-30":{"fajr":204,"sunrise":289,"dhuhr":700,"asr":922,"maghrib":1111,"isha":1205,"src":"f"},"08-31":{"fajr":205,"sunrise":290,"dhuhr":700,"asr":922,"maghrib":1109,"isha":1203,"src":"f"},"09-01":{"fajr":207,"sunrise":292,"dhuhr":700,"asr":921,"maghrib":1107,"isha":1201,"src":"p"},"09-02":{"fajr":209,"sunrise":294,"dhuhr":700,"asr":920,"maghrib":1104,"isha":1200,"src":"f"},"09-03":{"fajr":210,"sunrise":295,"dhuhr":700,"asr":920,"maghrib":1102,"isha":1197,"src":"f"},"09-04":{"fajr":212,"sunrise":297,"dhuhr":699,"asr":919,"maghrib":1100,"isha":1195,"src":"f"},"09-05":{"fajr":214,"sunrise":299,"dhuhr":699,"asr":917,"maghrib":1098,"isha":1193,"src":"f"},"09-06":{"fajr":215,"sunrise":300,"dhuhr":699,"asr":915,"maghrib":1095,"isha":1190,"src":"f"},"09-07":{"fajr":217,"sunrise":302,"dhuhr":698,"asr":913,"maghrib":1093,"isha":1188,"src":"f"},"09-08":{"fajr":218,"sunrise":303,"dhuhr":698,"asr":912,"maghrib":1091,"isha":1185,"src":"f"},"09-09":{"fajr":220,"sunrise":305,"dhuhr":698,"asr":910,"maghrib":1088,"isha":1182,"src":"f"},"09-10":{"fajr":222,"sunrise":307,"dhuhr":697,"asr":909,"maghrib":1086,"isha":1180,"src":"f"},"09-11":{"fajr":223,"sunrise":308,"dhuhr":697,"asr":908,"maghrib":1084,"isha":1178,"src":"f"},"09-12":{"fajr":225,"sunrise":310,"dhuhr":697,"asr":906,"maghrib":1081,"isha":1175,"src":"f"},"09-13":{"fajr":227,"sunrise":312,"dhuhr":696,"asr":904,"maghrib":1079,"isha":1172,"src":"f"},"09-14":{"fajr":228,"sunrise":313,"dhuhr":696,"asr":903,"maghrib":1077,"isha":1170,"src":"f"},"09-15":{"fajr":230,"sunrise":315,"dhuhr":695,"asr":901,"maghrib":1074,"isha":1168,"src":"f"},"09-16":{"fajr":231,"sunrise":316,"dhuhr":695,"asr":900,"maghrib":1072,"isha":1165,"src":"f"},"09-17":{"fajr":233,"sunrise":318,"dhuhr":695,"asr":898,"maghrib":1070,"isha":1162,"src":"f"},"09-18":{"fajr":235,"sunrise":320,"dhuhr":694,"asr":896,"maghrib":1067,"isha":1159,"src":"f"},"09-19":{"fajr":236,"sunrise":321,"dhuhr":694,"asr":895,"maghrib":1065,"isha":1156,"src":"f"},"09-20":{"fajr":238,"sunrise":323,"dhuhr":694,"asr":894,"maghrib":1063,"isha":1154,"src":"f"},"09-21":{"fajr":240,"sunrise":325,"dhuhr":693,"asr":892,"maghrib":1060,"isha":1152,"src":"f"},"09-22":{"fajr":241,"sunrise":326,"dhuhr":693,"asr":890,"maghrib":1058,"isha":1150,"src":"f"},"09-23":{"fajr":243,"sunrise":328,"dhuhr":693,"asr":888,"maghrib":1056,"isha":1148,"src":"f"},"09-24":{"fajr":245,"sunrise":330,"dhuhr":692,"asr":886,"maghrib":1053,"isha":1145,"src":"f"},"09-25":{"fajr":246,"sunrise":331,"dhuhr":692,"asr":885,"maghrib":1051,"isha":1143,"src":"f"},"09-26":{"fajr":248,"sunrise":333,"dhuhr":692,"asr":884,"maghrib":1049,"isha":1141,"src":"f"},"09-27":{"fajr":250,"sunrise":335,"dhuhr":691,"asr":882,"maghrib":1046,"isha":1140,"src":"f"},"09-28":{"fajr":251,"sunrise":336,"dhuhr":691,"asr":880,"maghrib":1044,"isha":1138,"src":"f"},"09-29":{"fajr":253,"sunrise":338,"dhuhr":691,"asr":879,"maghrib":1042,"isha":1136,"src":"f"},"09-30":{"fajr":255,"sunrise":340,"dhuhr":690,"asr":877,"maghrib":1039,"isha":1134,"src":"f"},"10-01":{"fajr":256,"sunrise":341,"dhuhr":690,"asr":876,"maghrib":1037,"isha":1132,"src":"f"},"10-02":{"fajr":258,"sunrise":343,"dhuhr":690,"asr":873,"maghrib":1035,"isha":1130,"src":"f"},"10-03":{"fajr":260,"sunrise":345,"dhuhr":689,"asr":871,"maghrib":1032,"isha":1128,"src":"f"},"10-04":{"fajr":261,"sunrise":346,"dhuhr":689,"asr":870,"maghrib":1030,"isha":1126,"src":"f"},"10-05":{"fajr":263,"sunrise":348,"dhuhr":689,"asr":868,"maghrib":1028,"isha":1124,"src":"f"},"10-06":{"fajr":265,"sunrise":350,"dhuhr":688,"asr":866,"maghrib":1026,"isha":1123,"src":"f"},"10-07":{"fajr":266,"sunrise":351,"dhuhr":688,"asr":865,"maghrib":1023,"isha":1122,"src":"f"},"10-08":{"fajr":268,"sunrise":353,"dhuhr":688,"asr":863,"maghrib":1021,"isha":1120,"src":"f"},"10-09":{"fajr":270,"sunrise":355,"dhuhr":688,"asr":861,"maghrib":1019,"isha":1118,"src":"f"},"10-10":{"fajr":271,"sunrise":356,"dhuhr":687,"asr":859,"maghrib":1017,"isha":1117,"src":"f"},"10-11":{"fajr":273,"sunrise":358,"dhuhr":687,"asr":858,"maghrib":1014,"isha":1115,"src":"f"},"10-12":{"fajr":275,"sunrise":360,"dhuhr":687,"asr":856,"maghrib":1012,"isha":1113,"src":"f"},"10-13":{"fajr":277,"sunrise":362,"dhuhr":687,"asr":855,"maghrib":1010,"isha":1111,"src":"f"},"10-14":{"fajr":278,"sunrise":363,"dhuhr":686,"asr":853,"maghrib":1008,"isha":1109,"src":"f"},"10-15":{"fajr":280,"sunrise":365,"dhuhr":686,"asr":852,"maghrib":1006,"isha":1107,"src":"f"},"10-16":{"fajr":282,"sunrise":367,"dhuhr":686,"asr":850,"maghrib":1003,"isha":1105,"src":"f"},"10-17":{"fajr":283,"sunrise":368,"dhuhr":686,"asr":848,"maghrib":1001,"isha":1103,"src":"f"},"10-18":{"fajr":285,"sunrise":370,"dhuhr":686,"asr":846,"maghrib":999,"isha":1102,"src":"f"},"10-19":{"fajr":287,"sunrise":372,"dhuhr":686,"asr":844,"maghrib":997,"isha":1101,"src":"f"},"10-20":{"fajr":289,"sunrise":374,"dhuhr":685,"asr":842,"maghrib":995,"isha":1099,"src":"f"},"10-21":{"fajr":290,"sunrise":375,"dhuhr":685,"asr":840,"maghrib":993,"isha":1096,"src":"f"},"10-22":{"fajr":292,"sunrise":377,"dhuhr":685,"asr":839,"maghrib":991,"isha":1095,"src":"f"},"10-23":{"fajr":294,"sunrise":379,"dhuhr":685,"asr":837,"maghrib":989,"isha":1093,"src":"f"},"10-24":{"fajr":296,"sunrise":381,"dhuhr":684,"asr":835,"maghrib":987,"isha":1092,"src":"f"},"10-25":{"fajr":298,"sunrise":383,"dhuhr":684,"asr":833,"maghrib":985,"isha":1090,"src":"f"},"10-26":{"fajr":299,"sunrise":384,"dhuhr":684,"asr":831,"maghrib":983,"isha":1088,"src":"f"},"10-27":{"fajr":301,"sunrise":386,"dhuhr":684,"asr":830,"maghrib":981,"isha":1086,"src":"f"},"10-28":{"fajr":303,"sunrise":388,"dhuhr":684,"asr":828,"maghrib":979,"isha":1084,"src":"f"},"10-29":{"fajr":305,"sunrise":390,"dhuhr":684,"asr":827,"maghrib":977,"isha":1083,"src":"f"},"10-30":{"fajr":307,"sunrise":392,"dhuhr":684,"asr":826,"maghrib":975,"isha":1081,"src":"f"},"10-31":{"fajr":308,"sunrise":393,"dhuhr":684,"asr":824,"maghrib":973,"isha":1080,"src":"f"},"11-01":{"fajr":310,"sunrise":395,"dhuhr":684,"asr":823,"maghrib":971,"isha":1079,"src":"f"},"11-02":{"fajr":312,"sunrise":397,"dhuhr":684,"asr":822,"maghrib":969,"isha":1079,"src":"f"},"11-03":{"fajr":314,"sunrise":399,"dhuhr":684,"asr":820,"maghrib":968,"isha":1077,"src":"f"},"11-04":{"fajr":316,"sunrise":401,"dhuhr":684,"asr":819,"maghrib":966,"isha":1076,"src":"f"},"11-05":{"fajr":317,"sunrise":402,"dhuhr":684,"asr":817,"maghrib":964,"isha":1074,"src":"f"},"11-06":{"fajr":319,"sunrise":404,"dhuhr":684,"asr":817,"maghrib":962,"isha":1073,"src":"f"},"11-07":{"fajr":321,"sunrise":406,"dhuhr":684,"asr":816,"maghrib":961,"isha":1070,"src":"f"},"11-08":{"fajr":323,"sunrise":408,"dhuhr":684,"asr":815,"maghrib":959,"isha":1068,"src":"f"},"11-09":{"fajr":325,"sunrise":410,"dhuhr":684,"asr":814,"maghrib":958,"isha":1066,"src":"f"},"11-10":{"fajr":326,"sunrise":411,"dhuhr":684,"asr":814,"maghrib":956,"isha":1064,"src":"f"},"11-11":{"fajr":328,"sunrise":413,"dhuhr":684,"asr":812,"maghrib":954,"isha":1063,"src":"f"},"11-12":{"fajr":330,"sunrise":415,"dhuhr":684,"asr":810,"maghrib":953,"isha":1061,"src":"f"},"11-13":{"fajr":332,"sunrise":417,"dhuhr":684,"asr":809,"maghrib":951,"isha":1059,"src":"f"},"11-14":{"fajr":333,"sunrise":418,"dhuhr":684,"asr":808,"maghrib":950,"isha":1059,"src":"f"},"11-15":{"fajr":335,"sunrise":420,"dhuhr":685,"asr":808,"maghrib":949,"isha":1058,"src":"f"},"11-16":{"fajr":337,"sunrise":422,"dhuhr":685,"asr":807,"maghrib":947,"isha":1056,"src":"f"},"11-17":{"fajr":339,"sunrise":424,"dhuhr":685,"asr":806,"maghrib":946,"isha":1054,"src":"f"},"11-18":{"fajr":340,"sunrise":425,"dhuhr":685,"asr":805,"maghrib":945,"isha":1052,"src":"f"},"11-19":{"fajr":342,"sunrise":427,"dhuhr":686,"asr":804,"maghrib":943,"isha":1050,"src":"f"},"11-20":{"fajr":344,"sunrise":429,"dhuhr":686,"asr":803,"maghrib":942,"isha":1049,"src":"f"},"11-21":{"fajr":345,"sunrise":430,"dhuhr":686,"asr":802,"maghrib":941,"isha":1048,"src":"f"},"11-22":{"fajr":347,"sunrise":432,"dhuhr":686,"asr":801,"maghrib":940,"isha":1046,"src":"f"},"11-23":{"fajr":349,"sunrise":434,"dhuhr":687,"asr":800,"maghrib":939,"isha":1044,"src":"f"},"11-24":{"fajr":350,"sunrise":435,"dhuhr":687,"asr":799,"maghrib":938,"isha":1044,"src":"f"},"11-25":{"fajr":352,"sunrise":437,"dhuhr":687,"asr":799,"maghrib":937,"isha":1042,"src":"f"},"11-26":{"fajr":353,"sunrise":438,"dhuhr":688,"asr":798,"maghrib":936,"isha":1041,"src":"f"},"11-27":{"fajr":355,"sunrise":440,"dhuhr":688,"asr":798,"maghrib":935,"isha":1040,"src":"f"},"11-28":{"fajr":356,"sunrise":441,"dhuhr":688,"asr":797,"maghrib":934,"isha":1039,"src":"f"},"11-29":{"fajr":358,"sunrise":443,"dhuhr":689,"asr":797,"maghrib":933,"isha":1039,"src":"f"},"11-30":{"fajr":359,"sunrise":444,"dhuhr":689,"asr":796,"maghrib":933,"isha":1037,"src":"f"},"12-01":{"fajr":361,"sunrise":446,"dhuhr":689,"asr":796,"maghrib":932,"isha":1036,"src":"f"},"12-02":{"fajr":362,"sunrise":447,"dhuhr":689,"asr":796,"maghrib":931,"isha":1036,"src":"f"},"12-03":{"fajr":364,"sunrise":449,"dhuhr":690,"asr":795,"maghrib":931,"isha":1035,"src":"f"},"12-04":{"fajr":365,"sunrise":450,"dhuhr":690,"asr":795,"maghrib":930,"isha":1035,"src":"f"},"12-05":{"fajr":366,"sunrise":451,"dhuhr":690,"asr":794,"maghrib":930,"isha":1035,"src":"f"},"12-06":{"fajr":367,"sunrise":452,"dhuhr":691,"asr":794,"maghrib":930,"isha":1034,"src":"f"},"12-07":{"fajr":369,"sunrise":454,"dhuhr":691,"asr":794,"maghrib":929,"isha":1034,"src":"f"},"12-08":{"fajr":370,"sunrise":455,"dhuhr":692,"asr":794,"maghrib":929,"isha":1034,"src":"f"},"12-09":{"fajr":371,"sunrise":456,"dhuhr":692,"asr":794,"maghrib":929,"isha":1034,"src":"f"},"12-10":{"fajr":372,"sunrise":457,"dhuhr":693,"asr":793,"maghrib":928,"isha":1034,"src":"f"},"12-11":{"fajr":373,"sunrise":458,"dhuhr":693,"asr":793,"maghrib":928,"isha":1034,"src":"f"},"12-12":{"fajr":374,"sunrise":459,"dhuhr":693,"asr":793,"maghrib":928,"isha":1035,"src":"f"},"12-13":{"fajr":375,"sunrise":460,"dhuhr":694,"asr":795,"maghrib":928,"isha":1035,"src":"f"},"12-14":{"fajr":376,"sunrise":461,"dhuhr":694,"asr":796,"maghrib":928,"isha":1035,"src":"f"},"12-15":{"fajr":377,"sunrise":462,"dhuhr":695,"asr":796,"maghrib":929,"isha":1035,"src":"f"},"12-16":{"fajr":378,"sunrise":463,"dhuhr":695,"asr":796,"maghrib":929,"isha":1035,"src":"f"},"12-17":{"fajr":378,"sunrise":463,"dhuhr":695,"asr":798,"maghrib":929,"isha":1035,"src":"f"},"12-18":{"fajr":379,"sunrise":464,"dhuhr":696,"asr":798,"maghrib":929,"isha":1036,"src":"f"},"12-19":{"fajr":380,"sunrise":465,"dhuhr":696,"asr":799,"maghrib":930,"isha":1036,"src":"f"},"12-20":{"fajr":380,"sunrise":465,"dhuhr":697,"asr":799,"maghrib":930,"isha":1036,"src":"f"},"12-21":{"fajr":381,"sunrise":466,"dhuhr":697,"asr":799,"maghrib":930,"isha":1037,"src":"f"},"12-22":{"fajr":381,"sunrise":466,"dhuhr":698,"asr":800,"maghrib":931,"isha":1037,"src":"f"},"12-23":{"fajr":382,"sunrise":467,"dhuhr":698,"asr":801,"maghrib":932,"isha":1038,"src":"f"},"12-24":{"fajr":382,"sunrise":467,"dhuhr":699,"asr":801,"maghrib":932,"isha":1039,"src":"f"},"12-25":{"fajr":383,"sunrise":468,"dhuhr":700,"asr":802,"maghrib":933,"isha":1040,"src":"f"},"12-26":{"fajr":383,"sunrise":468,"dhuhr":700,"asr":803,"maghrib":934,"isha":1040,"src":"f"},"12-27":{"fajr":383,"sunrise":468,"dhuhr":701,"asr":804,"maghrib":934,"isha":1041,"src":"f"},"12-28":{"fajr":383,"sunrise":468,"dhuhr":701,"asr":804,"maghrib":935,"isha":1042,"src":"f"},"12-29":{"fajr":383,"sunrise":468,"dhuhr":702,"asr":804,"maghrib":936,"isha":1044,"src":"f"},"12-30":{"fajr":383,"sunrise":468,"dhuhr":702,"asr":805,"maghrib":937,"isha":1045,"src":"f"},"12-31":{"fajr":383,"sunrise":468,"dhuhr":703,"asr":806,"maghrib":938,"isha":1046,"src":"f"}}}</script>
+
+<script>
+(function(){
+'use strict';
+
+/*==TIMEMATHS-START==*/
+/* Everything between these two markers is pure: no DOM, no page globals, only
+   Date and Intl. The test harness extracts this exact block and runs it against
+   the real times.json, so it must stay self-contained. */
+
+var TZ = 'Europe/Amsterdam';
+var MIN = 60000, DAY = 86400000;
+var ORDER = ['tahajjud','fajr','dhuhr','asr','maghrib','isha'];
+var ADHAN_IDS = ['fajr','dhuhr','asr','maghrib','isha'];
+
+// Built once. Constructing an Intl.DateTimeFormat is the expensive part and
+// this runs every second.
+var PARTS_FMT = new Intl.DateTimeFormat('en-GB', {
+  timeZone: TZ, hourCycle: 'h23',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit'
+});
+
+function pad2(n){ n = Math.floor(n); return (n < 10 ? '0' : '') + n; }
+
+// The Amsterdam civil date and time of an instant. This is the only way the app
+// is allowed to learn what day it is: the phone's own zone is irrelevant, he
+// travels and the mosque does not.
+function zonedParts(ms){
+  var parts = PARTS_FMT.formatToParts(new Date(ms));
+  var o = {}, i;
+  for (i = 0; i < parts.length; i++) { if (parts[i].type !== 'literal') o[parts[i].type] = parts[i].value; }
+  var hh = parseInt(o.hour, 10);
+  if (hh === 24) hh = 0;        // a few older ICU builds say 24:00 for midnight
+  return { y: +o.year, m: +o.month, d: +o.day, hh: hh, mm: +o.minute };
+}
+
+// "HH:MM" in Amsterdam, assembled from parts so that no locale can slip in a
+// dot separator or an am/pm.
+function clockHM(ms){
+  var parts = PARTS_FMT.formatToParts(new Date(ms));
+  var h = '00', m = '00', i;
+  for (i = 0; i < parts.length; i++) {
+    if (parts[i].type === 'hour') h = parts[i].value;
+    if (parts[i].type === 'minute') m = parts[i].value;
+  }
+  if (h === '24') h = '00';
+  return h + ':' + m;
+}
+
+function dayKey(m, d){ return pad2(m) + '-' + pad2(d); }
+
+// times.json holds one generic year. 29 February is missing from it (the source
+// year is not a leap one), so a leap day borrows 28 February - a minute of
+// error, versus an empty screen.
+function entryFor(times, y, m, d){
+  var days = times.days, k = dayKey(m, d), i, t, kk;
+  if (days[k]) return days[k];
+  if (k === '02-29' && days['02-28']) return days['02-28'];
+  // A hole anywhere else should be impossible; walk backwards rather than fail.
+  for (i = 1; i <= 7; i++) {
+    t = new Date(Date.UTC(y, m - 1, d - i));
+    kk = dayKey(t.getUTCMonth() + 1, t.getUTCDate());
+    if (days[kk]) return days[kk];
+  }
+  return null;
+}
+
+// The stored values are minutes after 00:00 UTC of that calendar day, so the
+// arithmetic here is plain UTC arithmetic with no zone in it at all. Daylight
+// saving is re-applied later, once, when an instant is formatted for display -
+// which is why these files keep working in years where DST moves.
+function dayAt(times, y, m, d){
+  var e = entryFor(times, y, m, d);
+  if (!e) return null;
+  var base = Date.UTC(y, m - 1, d);
+  return {
+    y: y, m: m, d: d, base: base, src: e.src,
+    fajr: base + e.fajr * MIN,
+    sunrise: base + e.sunrise * MIN,
+    dhuhr: base + e.dhuhr * MIN,
+    asr: base + e.asr * MIN,
+    maghrib: base + e.maghrib * MIN,
+    isha: base + e.isha * MIN
+  };
+}
+
+function shiftYmd(y, m, d, n){
+  var t = new Date(Date.UTC(y, m - 1, d + n));
+  return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() };
+}
+
+// One civil day, plus the two values that only exist in relation to its
+// neighbours: the start of the last third of the night (which begins at
+// YESTERDAY's maghrib) and the fajr that closes tonight's isha.
+function scheduleFor(times, y, m, d){
+  var cur = dayAt(times, y, m, d);
+  if (!cur) return null;
+  var p = shiftYmd(y, m, d, -1), n = shiftYmd(y, m, d, 1);
+  var prev = dayAt(times, p.y, p.m, p.d), nx = dayAt(times, n.y, n.m, n.d);
+  var prevMaghrib = prev ? prev.maghrib : cur.maghrib - DAY;
+  cur.night = cur.fajr - prevMaghrib;
+  // Rounded to the minute so the countdown agrees with the printed HH:MM.
+  cur.tahajjud = Math.round((cur.fajr - cur.night / 3) / MIN) * MIN;
+  cur.fajrNext = nx ? nx.fajr : cur.fajr + DAY;
+  return cur;
+}
+
+function byStart(a, b){ return a.start - b.start; }
+function byAt(a, b){ return a.at - b.at; }
+
+// The five obligatory windows of one day, plus the honest gap between sunrise
+// and dhuhr when nothing is open. Together they tile time without overlap:
+// fajr->sunrise, gap, dhuhr->asr, asr->maghrib, maghrib->isha, isha->next fajr.
+function obligatoryWindows(s){
+  return [
+    { id: 'fajr',    start: s.fajr,    end: s.sunrise },
+    { id: 'gap',     start: s.sunrise, end: s.dhuhr, gap: true },
+    { id: 'dhuhr',   start: s.dhuhr,   end: s.asr },
+    { id: 'asr',     start: s.asr,     end: s.maghrib },
+    { id: 'maghrib', start: s.maghrib, end: s.isha },
+    { id: 'isha',    start: s.isha,    end: s.fajrNext }
+  ];
+}
+
+// Everything the screen needs, derived from one instant. Three days are built
+// because both ends of "now" can belong to a neighbour: isha runs past midnight
+// into the next civil day, and tahajjud is measured from the previous one.
+function computeState(times, now){
+  var z = zonedParts(now);
+  var today = scheduleFor(times, z.y, z.m, z.d);
+  if (!today) return null;
+
+  var p = shiftYmd(z.y, z.m, z.d, -1), n = shiftYmd(z.y, z.m, z.d, 1);
+  var yst = scheduleFor(times, p.y, p.m, p.d);
+  var tmr = scheduleFor(times, n.y, n.m, n.d);
+  var scheds = [];
+  if (yst) scheds.push(yst);
+  scheds.push(today);
+  if (tmr) scheds.push(tmr);
+
+  var stream = [], adhans = [], i, j;
+  for (i = 0; i < scheds.length; i++) {
+    var w = obligatoryWindows(scheds[i]);
+    for (j = 0; j < w.length; j++) stream.push(w[j]);
+    for (j = 0; j < ADHAN_IDS.length; j++) adhans.push({ id: ADHAN_IDS[j], at: scheds[i][ADHAN_IDS[j]] });
+  }
+  stream.sort(byStart);
+  adhans.sort(byAt);
+
+  var current = null;
+  for (i = 0; i < stream.length; i++) {
+    if (now >= stream[i].start && now < stream[i].end) { current = stream[i]; break; }
+  }
+
+  // Strictly ">": at the exact second of the adhan it has arrived, and the one
+  // after it is what we are now counting towards.
+  var next = null, prev = null;
+  for (i = 0; i < adhans.length; i++) {
+    if (adhans[i].at > now) { next = adhans[i]; break; }
+    prev = adhans[i];
+  }
+  if (!next) next = { id: 'fajr', at: today.fajrNext };
+  if (!prev) prev = { id: 'isha', at: next.at - 6 * 3600000 };
+
+  // Tahajjud is voluntary and overlaps isha, so it is tracked separately rather
+  // than competing for "the window that is open".
+  var tah = null;
+  for (i = 0; i < scheds.length; i++) {
+    if (now >= scheds[i].tahajjud && now < scheds[i].fajr) {
+      tah = { id: 'tahajjud', start: scheds[i].tahajjud, end: scheds[i].fajr };
+    }
+  }
+
+  var rows = [
+    { id: 'tahajjud', start: today.tahajjud, end: today.fajr, voluntary: true },
+    { id: 'fajr',     start: today.fajr,     end: today.sunrise },
+    { id: 'dhuhr',    start: today.dhuhr,    end: today.asr },
+    { id: 'asr',      start: today.asr,      end: today.maghrib },
+    { id: 'maghrib',  start: today.maghrib,  end: today.isha },
+    { id: 'isha',     start: today.isha,     end: today.fajrNext }
+  ];
+
+  // Every row is this civil day's own window, and its state comes from its own
+  // interval - nothing here is borrowed from a neighbouring day. That is what
+  // keeps the list internally consistent: between midnight and fajr the isha
+  // still running is LAST night's, so today's isha row correctly reads as one
+  // that has not started yet, while the card above names the window that is
+  // actually open. Copying last night's isha into today's row instead would
+  // make it contradict the maghrib row printed right above it.
+  for (i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    if (now >= r.start && now < r.end) { r.state = 'cur'; continue; }
+    // "next" only where the row's own start IS the next adhan. In the evening
+    // that adhan is tomorrow's fajr, which is not on today's list, so nothing
+    // is marked - marking this morning's fajr row would be a lie.
+    if (r.start === next.at) { r.state = 'next'; continue; }
+    r.state = now >= r.end ? 'past' : 'future';
+  }
+
+  var span = next.at - prev.at;
+  var ring = span > 0 ? (now - prev.at) / span : 0;
+  if (ring < 0) ring = 0; if (ring > 1) ring = 1;
+
+  var nz = zonedParts(next.at);
+
+  return {
+    now: now, z: z, dayId: z.y + '-' + z.m + '-' + z.d,
+    day: today, current: current, next: next, prev: prev,
+    nextTomorrow: !(nz.y === z.y && nz.m === z.m && nz.d === z.d),
+    ring: ring, tahajjud: tah, rows: rows
+  };
+}
+
+// h:mm:ss while there is an hour left, mm:ss inside the last one - the way a
+// timer on the Lock Screen behaves. Ceil, so "00:01" is shown for the whole of
+// the final second instead of a premature zero.
+function fmtCountdown(ms){
+  var s = Math.max(0, Math.ceil(ms / 1000));
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h > 0 ? (h + ':' + pad2(m) + ':' + pad2(sec)) : (pad2(m) + ':' + pad2(sec));
+}
+
+// Compact duration for the timeline column: "2 h 14" / "48 min".
+function fmtSpan(ms){
+  var mins = Math.max(0, Math.round(ms / MIN));
+  var h = Math.floor(mins / 60), m = mins % 60;
+  if (h > 0) return h + ' h ' + pad2(m);
+  return m + ' min';
+}
+
+// The same duration as a sentence, rounded up so that "1 min" is the smallest
+// thing it can say while a window is still open.
+function fmtLeft(ms){
+  var mins = Math.max(0, Math.ceil(ms / MIN));
+  var h = Math.floor(mins / 60), m = mins % 60;
+  if (h > 0) return m > 0 ? (h + ' h ' + pad2(m) + ' min') : (h + ' h');
+  return m + ' min';
+}
+/*==TIMEMATHS-END==*/
+
+var NAMES = {
+  tahajjud: ['Tahajjud', 'Teheccüd'],
+  fajr:     ['Fajr',     'Sabah'],
+  dhuhr:    ['Dhuhr',    'Öğle'],
+  asr:      ['Asr',      'İkindi'],
+  maghrib:  ['Maghrib',  'Akşam'],
+  isha:     ['Isha',     'Yatsı']
+};
+var WEEKDAYS = ['duminică','luni','marți','miercuri','joi','vineri','sâmbătă'];
+var MONTHS = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie',
+              'august','septembrie','octombrie','noiembrie','decembrie'];
+var MONTHS_ABBR = ['ian.','feb.','mart.','apr.','mai','iun.','iul.','aug.','sept.','oct.','nov.','dec.'];
+
+// Written out rather than asked of Intl: ro-RO data is present on iOS, but this
+// is three lines and can never come back capitalised differently on some phone.
+function romanianDate(z){
+  var wd = new Date(Date.UTC(z.y, z.m - 1, z.d)).getUTCDay();
+  var s = WEEKDAYS[wd] + ', ' + z.d + ' ' + MONTHS[z.m - 1] + ' ' + z.y;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+var $ = function(id){ return document.getElementById(id); };
+var app = $('app'), rowsEl = $('rows');
+var arc = $('arc'), secArc = $('secArc'), head = $('head');
+var R_ARC = 94, R_SEC = 105;
+var C_ARC = 2 * Math.PI * R_ARC, C_SEC = 2 * Math.PI * R_SEC;
+
+var times = null;         // the schedule in force
+var rowEls = {};          // id -> the bits of one timeline row
+var sunT = null;
+var lastSecFrac = 2;      // forces a clean start on the first sweep
+var firstPaint = true;
+
+function setText(el, s){ if (el && el.__t !== s) { el.__t = s; el.textContent = s; } }
+function setW(el, frac){
+  if (!(frac >= 0)) frac = 0;                 // also catches NaN from a zero-length window
+  var p = Math.max(0, Math.min(1, frac)) * 100;
+  var s = p.toFixed(2) + '%';
+  if (el.__w !== s) { el.__w = s; el.style.width = s; }
+}
+
+function buildRows(){
+  rowsEl.innerHTML = '';
+  rowEls = {};
+  for (var i = 0; i < ORDER.length; i++) {
+    var id = ORDER[i];
+    var el = document.createElement('div');
+    el.className = 'tr' + (id === 'tahajjud' ? ' vl' : '');
+    el.innerHTML =
+      '<span class="dot"></span>' +
+      '<div class="mn"><span class="nm">' + NAMES[id][0] + '</span>' +
+      '<span class="t2">' + NAMES[id][1] + '</span>' +
+      (id === 'tahajjud'
+        ? '<span class="tag vl">voluntar</span>'
+        : '<span class="tag nx" hidden>urmează</span>') + '</div>' +
+      '<div class="rt"><div class="rg"><span class="a">--:--</span>' +
+      '<span class="ar">&#8594;</span><span class="b">--:--</span></div>' +
+      '<div class="du"></div></div>' +
+      '<span class="prog"><i></i></span>';
+    rowsEl.appendChild(el);
+    rowEls[id] = {
+      root: el,
+      a: el.querySelector('.a'), b: el.querySelector('.b'),
+      du: el.querySelector('.du'), nx: el.querySelector('.tag.nx'),
+      prog: el.querySelector('.prog i')
+    };
+    if (id === 'fajr') {
+      var sun = document.createElement('div');
+      sun.className = 'sun';
+      sun.innerHTML = '<span class="sdot"></span><span class="stx">Răsărit <b id="sunT">--:--</b>' +
+                      ' · nicio fereastră până la Dhuhr</span>';
+      rowsEl.appendChild(sun);
+      sunT = sun.querySelector('#sunT');
+    }
+  }
+}
+
+function setArc(frac){
+  arc.style.strokeDasharray = C_ARC;
+  arc.style.strokeDashoffset = (C_ARC * (1 - frac)).toFixed(2);
+  var ang = (frac * 360 - 90) * Math.PI / 180;
+  head.setAttribute('cx', (110 + R_ARC * Math.cos(ang)).toFixed(2));
+  head.setAttribute('cy', (110 + R_ARC * Math.sin(ang)).toFixed(2));
+}
+
+function setSeconds(now){
+  var frac = (now % 60000) / 60000;
+  secArc.style.strokeDasharray = C_SEC;
+  // At the top of a minute the sweep restarts. Jump it back with the transition
+  // off, otherwise it spends a second unwinding anticlockwise.
+  if (frac < lastSecFrac) {
+    secArc.style.transition = 'none';
+    secArc.style.strokeDashoffset = C_SEC;
+    void secArc.getBoundingClientRect();
+    secArc.style.transition = '';
+  }
+  lastSecFrac = frac;
+  secArc.style.strokeDashoffset = (C_SEC * (1 - frac)).toFixed(2);
+}
+
+// Suppresses every transition across the repaint that follows. Used when the
+// app returns from the background: iOS froze the timers, so the new values are
+// minutes or hours away from the drawn ones and must not be animated into place.
+var nomoTimer = 0;
+function stopMotion(){
+  document.documentElement.className = 'nomo';
+  clearTimeout(nomoTimer);
+  nomoTimer = setTimeout(function(){ document.documentElement.className = ''; }, 80);
+  lastSecFrac = 2;
+}
+
+function paint(st){
+  // --- the countdown, which is the whole point of the screen ---
+  setText($('nxName'), NAMES[st.next.id][0]);
+  setText($('nxTr'), NAMES[st.next.id][1]);
+  setText($('cd'), fmtCountdown(st.next.at - st.now));
+  setText($('cdSub'), 'adhan ' + (st.nextTomorrow ? 'mâine ' : '') + 'la ' + clockHM(st.next.at));
+  setArc(st.ring);
+  setSeconds(st.now);
+
+  // --- the window that is open right now ---
+  var card = $('nowCard'), c = st.current;
+  if (c && c.gap) {
+    if (card.className !== 'card now gap') card.className = 'card now gap';
+    setText($('nwLabel'), 'Nicio fereastră deschisă');
+    setText($('nwName'), 'Între răsărit și Dhuhr');
+    setText($('nwTr'), '');
+    setText($('nwRem'), 'încă ' + fmtLeft(c.end - st.now));
+  } else if (c) {
+    if (card.className !== 'card now') card.className = 'card now';
+    setText($('nwLabel'), 'Deschis acum');
+    setText($('nwName'), NAMES[c.id][0]);
+    setText($('nwTr'), NAMES[c.id][1]);
+    setText($('nwRem'), 'mai rămân ' + fmtLeft(c.end - st.now));
+  }
+  if (c) {
+    // Before fajr, the isha still running began last night. Saying so is the
+    // difference between "that clashes with the list below" and "of course".
+    var cz = zonedParts(c.start);
+    var sameDay = cz.y === st.z.y && cz.m === st.z.m && cz.d === st.z.d;
+    setText($('nwFrom'), (sameDay ? '' : 'aseară ') + clockHM(c.start));
+    setText($('nwTo'), clockHM(c.end));
+    setW($('nwBar'), (st.now - c.start) / (c.end - c.start));
+  }
+
+  var chip = $('nwChip');
+  if (st.tahajjud) {
+    setText(chip, 'Tahajjud e deschis · până la ' + clockHM(st.tahajjud.end));
+    chip.hidden = false;
+  } else if (!chip.hidden) {
+    chip.hidden = true;
+  }
+
+  // --- the day ---
+  for (var i = 0; i < st.rows.length; i++) {
+    var r = st.rows[i], e = rowEls[r.id];
+    if (!e) continue;
+    setText(e.a, clockHM(r.start));
+    setText(e.b, clockHM(r.end));
+    setText(e.du, fmtSpan(r.end - r.start));
+    var cls = 'tr' + (r.id === 'tahajjud' ? ' vl' : '');
+    if (r.state === 'cur') cls += ' cur';
+    else if (r.state === 'next') cls += ' next';
+    else if (r.state === 'past') cls += ' past';
+    if (e.root.className !== cls) e.root.className = cls;
+    if (e.nx) e.nx.hidden = r.state !== 'next';
+    if (r.state === 'cur') setW(e.prog, (st.now - r.start) / (r.end - r.start));
+  }
+  if (sunT) setText(sunT, clockHM(st.day.sunrise));
+
+  if (firstPaint) {
+    firstPaint = false;
+    var gen = times && times.generated ? String(times.generated) : '';
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(gen);
+    setText($('foot'), 'Stedekestraat 27, Tilburg' +
+      (m ? ' · orar actualizat ' + (+m[3]) + ' ' + MONTHS_ABBR[+m[2] - 1] + ' ' + m[1] : ''));
+    // The ring fills once, from empty, the first time it is drawn.
+    if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      var target = arc.style.strokeDashoffset;
+      arc.style.transition = 'none';
+      arc.style.strokeDashoffset = C_ARC;
+      void arc.getBoundingClientRect();
+      arc.style.transition = 'stroke-dashoffset .95s cubic-bezier(.22,.8,.2,1)';
+      arc.style.strokeDashoffset = target;
+      setTimeout(function(){ arc.style.transition = ''; }, 1000);
+    }
+    document.body.className = 'anim';
+  }
+}
+
+function tick(){
+  // The clock and the date need no schedule, so they are painted first and
+  // keep running even if times.json never arrives.
+  var now = Date.now();
+  setText($('dDate'), romanianDate(zonedParts(now)));
+  setText($('dClock'), clockHM(now));
+  if (!times) { showFail(true); return; }
+  var st = computeState(times, now);
+  if (!st) { showFail(true); return; }
+  showFail(false);
+  paint(st);
+}
+
+function showFail(on){
+  $('fail').hidden = !on;
+  if (on) { if (app.className !== 'wrap nodata') app.className = 'wrap nodata'; }
+  else if (app.className !== 'wrap') app.className = 'wrap';
+}
+
+// Self-correcting: each tick is scheduled for the next whole second rather than
+// 1000ms from wherever the last one drifted to.
+var tickTimer = 0;
+function loop(){
+  clearTimeout(tickTimer);
+  var delay = 1000 - (Date.now() % 1000) + 10;
+  tickTimer = setTimeout(function(){ tick(); loop(); }, delay);
+}
+
+function usable(d){
+  return !!(d && d.days && typeof d.days === 'object' && d.days['01-01'] &&
+            typeof d.days['01-01'].fajr === 'number');
+}
+
+// Built-in copy first, so the very first frame is already correct and the app is
+// never blank - not while the network hangs, not on a cold offline start.
+function loadSnapshot(){
+  try {
+    var raw = $('snapshot').textContent;
+    var d = JSON.parse(raw);
+    if (usable(d)) { times = d; buildRows(); tick(); return true; }
+  } catch (e) {}
+  return false;
+}
+
+// Then the real file, which the scheduled scrape keeps up to date. Two paths
+// because the candidate is previewed from candidates/ but ships at the root.
+var SOURCES = ['./times.json', '../times.json'];
+
+function fetchTimes(){
+  if (typeof fetch !== 'function') return;
+  var tried = 0;
+  var attempt = function(){
+    if (tried >= SOURCES.length) return;
+    var url = SOURCES[tried++];
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var killer = setTimeout(function(){ if (ctrl) ctrl.abort(); }, 6000);
+    fetch(url + '?t=' + Date.now(), {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function(r){
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }).then(function(d){
+      clearTimeout(killer);
+      if (!usable(d)) throw new Error('unusable');
+      times = d;
+      if (!rowEls.fajr) buildRows();
+      tick();
+    })['catch'](function(){
+      clearTimeout(killer);
+      attempt();
+    });
+  };
+  attempt();
+}
+
+// ---------------------------------------------------------------------------
+// service worker
+// ---------------------------------------------------------------------------
+// https only (it cannot register anywhere else and would throw), and the page
+// has to work perfectly when there is none: iOS clears storage for apps it
+// decides are idle, and file:// and http:// previews have no worker at all.
+var swReg = null, reloading = false;
+function initSW(){
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') return;
+  var hadController = !!navigator.serviceWorker.controller;
+
+  navigator.serviceWorker.register('./sw.js').then(function(reg){
+    swReg = reg;
+    if (reg.waiting) { try { reg.waiting.postMessage('SKIP_WAITING'); } catch (e) {} }
+    reg.addEventListener('updatefound', function(){
+      var w = reg.installing;
+      if (!w) return;
+      w.addEventListener('statechange', function(){
+        if (w.state === 'installed' && navigator.serviceWorker.controller) {
+          try { w.postMessage('SKIP_WAITING'); } catch (e) {}
+        }
+      });
+    });
+  })['catch'](function(){});
+
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    // The very first worker taking control is not an update, it is the install.
+    if (!hadController || reloading) return;
+    reloading = true;
+    location.reload();
+  });
+}
+
+function checkForUpdate(){
+  fetchTimes();
+  if (swReg && swReg.update) { try { swReg.update(); } catch (e) {} }
+}
+
+// ---------------------------------------------------------------------------
+// boot
+// ---------------------------------------------------------------------------
+if (!loadSnapshot()) buildRows();
+tick();          // first frame now, not a second from now
+fetchTimes();
+loop();
+initSW();
+
+// iOS freezes timers in a backgrounded tab and in an installed app that has
+// been swiped away. On the way back, nothing on screen can be trusted: recompute
+// from the clock, and do not animate the catch-up.
+document.addEventListener('visibilitychange', function(){
+  if (document.visibilityState === 'visible') { stopMotion(); tick(); checkForUpdate(); }
+});
+window.addEventListener('pageshow', function(){ stopMotion(); tick(); checkForUpdate(); });
+window.addEventListener('online', checkForUpdate);
+window.addEventListener('focus', function(){ tick(); });
+setInterval(checkForUpdate, 15 * 60 * 1000);
+})();
+</script>
+</body>
+</html>

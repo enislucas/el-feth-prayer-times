@@ -1,0 +1,5 @@
+# Committed with LF regardless of the platform this was edited on. The shell
+# blocks inside .github/workflows/*.yml run on Linux: a stray CR at the end of
+# every line breaks them in ways that are painful to diagnose from a CI log.
+* text=auto eol=lf
+*.png binary

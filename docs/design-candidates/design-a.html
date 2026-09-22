@@ -1,0 +1,918 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<!-- viewport-fit=cover is what lets the page paint under the Dynamic Island and
+     behind the home indicator; every edge is then paid back with env() padding. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#05070C">
+
+<!-- iOS home-screen behaviour. black-translucent makes the status bar float over
+     our own background instead of over a grey bar, which is the whole point of a
+     near-black design; it only works because the safe-area padding below is real. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Namaz">
+<meta name="format-detection" content="telephone=no">
+
+<!-- sw.js looks for this exact string to tell our page apart from a hotel wifi
+     login page before it is allowed to overwrite the cached shell. Do not remove. -->
+<meta name="app-id" content="elfeth-prayer-times">
+
+<title>Namaz — El-Feth</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<!-- iOS ignores the manifest icons for "Add to Home Screen"; this link is the one it reads. -->
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" href="./icon-192.png">
+
+<style>
+/* ---------------------------------------------------------------------------
+   "Midnight glass": near-black ink, one accent, hairlines, type doing the work.
+   Everything is a token so the whole mood can be retuned from twelve lines.
+   --------------------------------------------------------------------------- */
+:root{
+  --ink:       #05070C;   /* page floor - almost black, very slightly blue */
+  --ink-2:     #0A0F1A;   /* the bottom of the page gradient */
+  --accent:    #8AAEFF;   /* the single accent. Nothing else is coloured. */
+  --accent-85: rgba(138,174,255,.85);
+  --accent-56: rgba(138,174,255,.56);
+  --accent-30: rgba(138,174,255,.30);
+  --accent-14: rgba(138,174,255,.14);
+  --glow:      rgba(126,160,255,.16);
+
+  /* Four steps of quiet, floored where they are. Anything dimmer than --text-4
+     was unreadable at full brightness outdoors, which is where he uses it. */
+  --text:      #F2F5FA;
+  --text-2:    rgba(238,243,252,.66);
+  --text-3:    rgba(238,243,252,.46);
+  --text-4:    rgba(238,243,252,.30);
+
+  --line:      rgba(255,255,255,.075);  /* hairline separators */
+  --glass:     rgba(255,255,255,.042);
+  --glass-line:rgba(255,255,255,.085);
+
+  --pad: 22px;
+}
+
+*{ box-sizing:border-box; margin:0; padding:0; }
+
+html{
+  background:var(--ink);            /* rubber-band overscroll shows THIS, so it must match */
+  overscroll-behavior:none;
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+}
+
+body{
+  color:var(--text);
+  /* -apple-system first: on iPhone this IS SF Pro, and it is most of the reason
+     the app reads as native rather than as a web page. */
+  font-family:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-synthesis:none;
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior:none;         /* no bounce past the top revealing a wrong colour */
+  -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;
+  user-select:none; -webkit-user-select:none;
+  min-height:100vh;                 /* old iOS */
+  min-height:100dvh;                /* 15.4+ : survives the URL bar sliding away */
+}
+
+/* The aura lives on a fixed layer rather than on body's background, because iOS
+   Safari does not honour background-attachment:fixed - it silently sizes the
+   gradient to the whole document, which puts the pool of light in the wrong
+   place the moment the page is tall enough to scroll.
+   One very soft pool of accent behind the countdown, a cool floor light at the
+   bottom, and a slow ink gradient. That is the entire depth budget. */
+.sky{
+  position:fixed; left:0; right:0; top:0; bottom:0; z-index:-1;
+  pointer-events:none;
+  background:
+    radial-gradient(125% 46% at 50% 4%,   var(--glow) 0%, rgba(126,160,255,0) 62%),
+    radial-gradient(90% 38% at 50% 100%,  rgba(138,174,255,.05) 0%, rgba(138,174,255,0) 70%),
+    linear-gradient(180deg, var(--ink) 0%, var(--ink-2) 100%);
+  animation:breathe 14s ease-in-out infinite;
+}
+
+/* Every clock, countdown and interval on screen. Both properties, because older
+   iOS honours font-feature-settings and newer ones honour font-variant-numeric. */
+.num{ font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1; }
+
+.app{
+  max-width:560px; margin:0 auto;
+  /* The four insets. In a Safari tab they are 0 and the fallbacks do the work. */
+  padding:calc(env(safe-area-inset-top, 0px)  + 16px) calc(env(safe-area-inset-right, 0px) + var(--pad))
+          calc(env(safe-area-inset-bottom,0px) + 26px) calc(env(safe-area-inset-left,  0px) + var(--pad));
+  min-height:100vh;
+  min-height:100dvh;
+  display:flex; flex-direction:column;
+}
+
+/* ---------------------------------------------- header: place, date, clock -- */
+.head{
+  display:flex; align-items:baseline; justify-content:space-between; gap:14px;
+  padding-bottom:16px;
+}
+.head .who{ min-width:0; }
+.place{
+  font-size:12.5px; font-weight:600; letter-spacing:.02em; color:var(--text-2);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.place b{ font-weight:600; color:var(--text); }
+.date{ font-size:12.5px; color:var(--text-3); margin-top:3px; }
+.clock{
+  font-size:15px; font-weight:500; color:var(--text-2); letter-spacing:.01em;
+  flex:none;
+}
+
+/* ------------------------------------------------------------------- hero -- */
+.hero{ padding:20px 0 21px; text-align:center; position:relative; }
+.eyebrow{
+  font-size:10.5px; font-weight:650; letter-spacing:.17em; text-transform:uppercase;
+  color:var(--text-3);
+}
+.hero .eyebrow{ color:var(--accent-85); }
+.next-name{
+  margin-top:11px; font-size:22px; font-weight:600; letter-spacing:-.01em; color:var(--text);
+}
+.next-name span{ font-weight:400; color:var(--text-3); }
+.count{
+  margin-top:1px;
+  font-size:clamp(52px, 16.5vw, 82px);
+  line-height:1.06;
+  font-weight:300;                 /* SF Pro Light: the iOS Weather temperature look */
+  letter-spacing:-.035em;
+  color:var(--text);
+  text-shadow:0 0 42px rgba(138,174,255,.18);   /* glass catching light, not neon */
+}
+.at{ margin-top:5px; font-size:13.5px; color:var(--text-2); letter-spacing:.005em; }
+
+/* ------------------------------------------------- the window open right now */
+.card{
+  position:relative;
+  border:1px solid var(--glass-line);
+  border-radius:20px;
+  background:var(--glass);
+  -webkit-backdrop-filter:blur(22px) saturate(140%);
+  backdrop-filter:blur(22px) saturate(140%);
+  padding:16px 17px 17px;
+  /* a hairline of light on the top edge - how iOS fakes a pane of glass */
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.055), 0 14px 40px rgba(0,0,0,.35);
+}
+.card-top{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+.card-left{ min-width:0; }
+.open-name{ margin-top:9px; font-size:19px; font-weight:600; letter-spacing:-.01em; }
+.open-name span{ font-weight:400; color:var(--text-3); }
+.remain{ font-size:12.5px; color:var(--text-2); flex:none; white-space:nowrap; }
+
+.bar{ margin-top:15px; display:flex; align-items:center; gap:10px; }
+.bar-end{ font-size:12px; color:var(--text-3); flex:none; }
+.track{
+  position:relative; flex:1 1 auto; height:3px; border-radius:2px;
+  background:rgba(255,255,255,.085);
+}
+.fill{
+  position:absolute; left:0; top:0; height:100%; width:0; border-radius:2px;
+  background:linear-gradient(90deg, var(--accent-30), var(--accent));
+}
+.head-dot{
+  position:absolute; top:50%; left:0; width:7px; height:7px; margin:-3.5px 0 0 -3.5px;
+  border-radius:50%; background:#fff;
+  box-shadow:0 0 0 3px rgba(138,174,255,.18), 0 0 14px 2px rgba(138,174,255,.55);
+}
+/* the sunrise -> Dhuhr stretch: nothing is open, and the bar says so by going
+   dashed instead of solid. Same geometry, so the head dot stays put. */
+.card.gap .track{
+  background:repeating-linear-gradient(90deg,
+    rgba(255,255,255,.14) 0 3px, rgba(255,255,255,0) 3px 7px);
+}
+.card.gap .fill{
+  background:repeating-linear-gradient(90deg,
+    var(--accent-56) 0 3px, rgba(138,174,255,0) 3px 7px);
+}
+.card.gap .head-dot{ background:var(--accent); box-shadow:0 0 12px 1px rgba(138,174,255,.45); }
+.card.gap .open-name{ color:var(--text-2); font-weight:500; }
+
+.tah-note{
+  margin-top:10px; padding-top:10px; border-top:1px solid var(--line);
+  font-size:12.5px; color:var(--text-2);
+}
+.tah-note b{ color:var(--accent); font-weight:600; }
+
+/* ------------------------------------------------------- the 24-hour rail -- */
+.rail-wrap{ margin-top:22px; }
+.rail{ position:relative; height:9px; }
+.segs{
+  position:absolute; left:0; right:0; top:0; bottom:0;
+  border-radius:5px; background:rgba(255,255,255,.055); overflow:hidden;
+}
+.seg{ position:absolute; top:0; height:100%; background:var(--accent); border-radius:2px; }
+.seg.on{ box-shadow:0 0 16px 1px rgba(138,174,255,.5); }
+.tah-strip{ position:relative; height:2px; margin-bottom:5px; }
+.tah-strip i{ position:absolute; top:0; height:0; border-top:2px dotted var(--accent-56); }
+.now-mark{
+  position:absolute; top:-5px; width:1.5px; height:19px; margin-left:-.75px;
+  background:#fff; border-radius:1px;
+  box-shadow:0 0 10px 2px rgba(255,255,255,.35);
+}
+.ticks{ position:relative; height:14px; margin-top:7px; }
+.ticks i{ position:absolute; top:0; width:1px; height:3px; background:var(--text-4); }
+.ticks b{
+  position:absolute; top:5px; font-size:9.5px; font-weight:500; color:var(--text-4);
+  transform:translateX(-50%); letter-spacing:.04em;
+}
+
+/* ------------------------------------------------------------------ list -- */
+/* One line per prayer, the way an iOS list does it. Two lines was prettier and
+   pushed Isha off the bottom of a 6.1" screen, which is the wrong trade for the
+   one screen he actually looks at. */
+.list{ margin-top:12px; list-style:none; }
+.row{
+  position:relative; display:flex; align-items:center; gap:13px;
+  padding:11px 2px 11px 0;
+  border-top:1px solid var(--line);
+}
+.row.first{ border-top:none; }
+.dot{
+  flex:none; width:7px; height:7px; border-radius:50%;
+  background:transparent; box-shadow:inset 0 0 0 1px var(--text-4);
+}
+.row.next .dot{ box-shadow:inset 0 0 0 1.5px var(--accent-56); }
+.row.on   .dot{ background:var(--accent); box-shadow:0 0 12px 2px rgba(138,174,255,.55); }
+.row.past .dot{ box-shadow:inset 0 0 0 1px rgba(238,243,252,.13); }
+.r-name{ flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.r-ar{ font-size:17px; font-weight:600; letter-spacing:-.01em; color:var(--text); }
+.r-tr{ font-size:12.5px; color:var(--text-3); letter-spacing:.01em; margin-left:8px; }
+.r-int{ flex:none; font-size:15px; color:var(--text-2); letter-spacing:.005em; }
+
+.row.past .r-ar{ color:var(--text-3); font-weight:500; }
+.row.past .r-tr{ color:var(--text-4); }
+.row.past .r-int{ color:var(--text-4); }
+.row.on .r-int{ color:var(--accent); font-weight:500; }
+.row.on{
+  /* the open window gets light, not a box */
+  background:linear-gradient(90deg, var(--accent-14) 0%, rgba(138,174,255,0) 58%);
+  box-shadow:inset 2px 0 0 var(--accent);
+  border-radius:0 12px 12px 0;
+  margin-left:-10px; padding-left:10px; width:calc(100% + 10px);
+}
+.row.next .r-ar{ color:var(--text); }
+.row.next .r-int{ color:var(--text); }
+
+/* Tahajjud: voluntary, overlapping, and it must never be mistaken for one of the
+   five. It is inset behind a dashed rule and never takes the solid accent fill. */
+.row.vol{ padding-left:14px; }
+.row.vol .r-ar{ font-size:15.5px; font-weight:500; color:var(--text-2); }
+.row.vol .rule{
+  position:absolute; left:3px; top:8px; bottom:8px; width:0;
+  border-left:1px dashed var(--accent-30);
+}
+.row.vol.on{ background:none; box-shadow:none; margin-left:0; padding-left:14px; width:auto; }
+.row.vol.on .r-ar{ color:var(--text); }
+.row.vol.on .rule{ border-left:1px dashed var(--accent); }
+.row.vol.on .r-int{ color:var(--accent-56); }
+.tag{
+  display:inline-block; margin-left:7px; font-size:9.5px; font-weight:600;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--text-4);
+  vertical-align:.12em;
+}
+
+/* sunrise: a boundary, not a prayer - so it is a hairline with a word on it */
+.sun{
+  display:flex; align-items:center; gap:10px;
+  padding:8px 2px 8px 0; border-top:1px solid var(--line);
+  font-size:11.5px; color:var(--text-3);
+}
+.sun .mk{ flex:none; width:7px; text-align:center; color:var(--text-4); font-size:10px; }
+.sun .sp{ flex:1 1 auto; height:0; border-top:1px dashed rgba(255,255,255,.07); }
+
+/* Shown only once Isha has begun, when nothing in today's list is still ahead. */
+.tomorrow{
+  margin-top:15px; display:flex; justify-content:space-between; gap:12px;
+  font-size:12px; color:var(--text-3);
+}
+.tomorrow b{ color:var(--text-2); font-weight:600; }
+/* ------------------------------------------------------------- states ------ */
+.hide{ display:none !important; }
+.msg{ padding:44px 0; text-align:center; color:var(--text-2); font-size:14px; line-height:1.65; }
+
+/* One entrance, once. After that only the digits change and the aura breathes -
+   nothing that carries information ever moves. */
+@keyframes rise{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:none; } }
+@keyframes breathe{ 0%,100%{ opacity:.82; } 50%{ opacity:1; } }
+.app > *{ animation:rise .55s cubic-bezier(.22,.9,.3,1) both; }
+.hero{ animation-delay:.04s; }
+.card{ animation-delay:.08s; }
+.rail-wrap{ animation-delay:.12s; }
+.list{ animation-delay:.16s; }
+
+@media (prefers-reduced-motion:reduce){
+  .app > *, .sky{ animation:none !important; }
+}
+/* A 6.7" phone has about 150px left over once the day fits. Spend it on air
+   between the things, not on a void under them. */
+@media (min-height:860px){
+  .hero{ padding:40px 0 36px; }
+  .rail-wrap{ margin-top:30px; }
+  .list{ margin-top:18px; }
+  .row{ padding-top:15px; padding-bottom:15px; }
+  .sun{ padding-top:11px; padding-bottom:11px; }
+}
+/* On a 320px iPhone SE the row runs out of width and ellipsises the tag away
+   mid-word. The dashed rule already says "not one of the five", so drop it. */
+@media (max-width:360px){
+  .tag{ display:none; }
+  .r-tr{ font-size:12px; margin-left:7px; }
+}
+/* Short phones (SE): buy back vertical space rather than let anything clip. */
+@media (max-height:700px){
+  .hero{ padding:18px 0 22px; }
+  .rail-wrap{ margin-top:20px; }
+  .list{ margin-top:16px; }
+  .row{ padding-top:11px; padding-bottom:11px; }
+}
+</style>
+</head>
+
+<body>
+<div class="sky"></div>
+<div class="app">
+
+  <header class="head">
+    <div class="who">
+      <div class="place"><b>Tilburg</b> &middot; Moscheea El-Feth</div>
+      <div class="date" id="date">&nbsp;</div>
+    </div>
+    <div class="clock num" id="clock">&nbsp;</div>
+  </header>
+
+  <section class="hero" id="hero">
+    <div class="eyebrow">Urm&#259;torul adhan</div>
+    <div class="next-name" id="nextName">&nbsp;</div>
+    <div class="count num" id="count">&nbsp;</div>
+    <div class="at num" id="nextAt">&nbsp;</div>
+  </section>
+
+  <section class="card" id="card">
+    <div class="card-top">
+      <div class="card-left"><div class="eyebrow" id="openLabel">Acum</div></div>
+      <div class="remain num" id="remain">&nbsp;</div>
+    </div>
+    <div class="open-name" id="openName">&nbsp;</div>
+    <div class="bar">
+      <div class="bar-end num" id="barFrom">&nbsp;</div>
+      <div class="track"><div class="fill" id="fill"></div><div class="head-dot" id="dot"></div></div>
+      <div class="bar-end num" id="barTo">&nbsp;</div>
+    </div>
+    <div class="tah-note hide" id="tahNote"></div>
+  </section>
+
+  <section class="rail-wrap" id="railWrap">
+    <div class="tah-strip" id="tahStrip"></div>
+    <div class="rail">
+      <div class="segs" id="segs"></div>
+      <div class="now-mark" id="nowMark"></div>
+    </div>
+    <div class="ticks" id="ticks"></div>
+  </section>
+
+  <ul class="list" id="list"></ul>
+  <div class="tomorrow hide" id="tomorrow"></div>
+
+  <div class="msg hide" id="msg"></div>
+</div>
+
+<noscript><div class="msg">Aplica&#539;ia are nevoie de JavaScript.</div></noscript>
+
+<script>
+(function(){
+'use strict';
+
+/* === core:begin ===========================================================
+   Pure time maths. No DOM below this line until core:end - the throwaway Node
+   harness in tools/ slices exactly this region out and tests the shipped code
+   rather than a copy of it. Keep it that way.
+   ======================================================================== */
+
+var ZONE = 'Europe/Amsterdam';
+
+/* The five obligatory windows in the order the day runs them, plus Tahajjud,
+   which is voluntary and deliberately overlaps the end of Isha. */
+var NAMES = {
+  tahajjud:{ ar:'Tahajjud', tr:'Teheccüd' },
+  fajr:    { ar:'Fajr',     tr:'Sabah'  },
+  dhuhr:   { ar:'Dhuhr',    tr:'Öğle'   },
+  asr:     { ar:'Asr',      tr:'İkindi' },
+  maghrib: { ar:'Maghrib',  tr:'Akşam'  },
+  isha:    { ar:'Isha',     tr:'Yatsı'   }
+};
+
+var WEEKDAYS = ['duminică','luni','marți','miercuri','joi','vineri','sâmbătă'];
+var MONTHS = ['ianuarie','februarie','martie','aprilie','mai','iunie',
+              'iulie','august','septembrie','octombrie','noiembrie','decembrie'];
+
+/* Every clock value on screen is derived through this one formatter. The phone's
+   own local time is never read: he travels, and the mosque's schedule stays
+   Dutch wherever he happens to be standing.
+   hourCycle rather than hour12:false - some older engines answer "24" for
+   midnight when hour12 is set, which is why zoned() still normalises it. */
+var ZP = new Intl.DateTimeFormat('en-GB', {
+  timeZone: ZONE,
+  year:'numeric', month:'2-digit', day:'2-digit',
+  hour:'2-digit', minute:'2-digit', second:'2-digit',
+  hourCycle:'h23'
+});
+
+function zoned(t){
+  var parts = ZP.formatToParts(new Date(t)), o = {}, i;
+  for (i = 0; i < parts.length; i++){
+    if (parts[i].type !== 'literal') o[parts[i].type] = parts[i].value;
+  }
+  var h = +o.hour; if (h === 24) h = 0;
+  return { y:+o.year, m:+o.month, d:+o.day, h:h, mi:+o.minute, s:+o.second };
+}
+
+function pad2(n){ return (n < 10 ? '0' : '') + n; }
+function hhmm(t){ var z = zoned(t); return pad2(z.h) + ':' + pad2(z.mi); }
+function hhmmss(t){ var z = zoned(t); return pad2(z.h) + ':' + pad2(z.mi) + ':' + pad2(z.s); }
+
+/* Amsterdam's UTC offset at an instant, in ms. Only the day rail needs it - the
+   prayer instants themselves never require a local->UTC conversion, which is
+   the whole reason times.json stores minutes-after-UTC-midnight. */
+function offsetAt(t){
+  var base = Math.floor(t / 1000) * 1000;      /* zoned() has no ms to give back */
+  var z = zoned(base);
+  return Date.UTC(z.y, z.m - 1, z.d, z.h, z.mi, z.s) - base;
+}
+
+function civilOf(t){ var z = zoned(t); return { y:z.y, m:z.m, d:z.d }; }
+
+function shiftCivil(c, n){
+  var d = new Date(Date.UTC(c.y, c.m - 1, c.d) + n * 86400000);
+  return { y:d.getUTCFullYear(), m:d.getUTCMonth() + 1, d:d.getUTCDate() };
+}
+
+function weekdayOf(c){ return new Date(Date.UTC(c.y, c.m - 1, c.d)).getUTCDay(); }
+function keyOf(c){ return pad2(c.m) + '-' + pad2(c.d); }
+
+/* 00:00 Amsterdam on a given civil day, as an instant. Correct on both switch
+   days because the offset is sampled at 00:00 UTC, which on 29 March is still
+   CET (the jump happens at 01:00 UTC) and on 25 October is still CEST. */
+function localMidnight(c){
+  var guess = Date.UTC(c.y, c.m - 1, c.d);
+  return guess - offsetAt(guess);
+}
+
+/* The instant of local hour h on the day that starts at dayStart. Two passes,
+   because adding h hours can cross a DST boundary and land an hour out. */
+function localHour(dayStart, h){
+  var t = dayStart + h * 3600000;
+  return t - (offsetAt(t) - offsetAt(dayStart));
+}
+
+/* A stored value is "minutes after 00:00 UTC on this calendar day", so the
+   instant is a plain addition and daylight saving is Intl's problem, not ours:
+   the same instant re-renders under whatever rule is in force in the year he is
+   actually living in, however far the EU moves the switch dates. */
+function dayTimes(data, c){
+  var rec = data.days[keyOf(c)];
+  /* 29 February: the source year was not a leap year, so borrow the 28th. One
+     day of at most a minute's drift, once every four years. */
+  if (!rec && c.m === 2 && c.d === 29) rec = data.days['02-28'];
+  if (!rec) return null;
+  var base = Date.UTC(c.y, c.m - 1, c.d);
+  return {
+    fajr:    base + rec.fajr    * 60000,
+    sunrise: base + rec.sunrise * 60000,
+    dhuhr:   base + rec.dhuhr   * 60000,
+    asr:     base + rec.asr     * 60000,
+    maghrib: base + rec.maghrib * 60000,
+    isha:    base + rec.isha    * 60000
+  };
+}
+
+/* The six windows of one civil day.
+     Tahajjud  last third of the night -> Fajr   (voluntary, overlaps Isha)
+     Fajr      fajr -> sunrise
+     [ nothing is open between sunrise and dhuhr ]
+     Dhuhr     dhuhr -> asr
+     Asr       asr -> maghrib        (standard opinion, shadow factor 1)
+     Maghrib   maghrib -> isha
+     Isha      isha -> TOMORROW's fajr
+   The night that ends at today's Fajr began at YESTERDAY's Maghrib, so this
+   needs three days of data to answer for one. */
+function windowsFor(data, c){
+  var T = dayTimes(data, c);
+  var P = dayTimes(data, shiftCivil(c, -1));
+  var N = dayTimes(data, shiftCivil(c, 1));
+  if (!T || !P || !N) return null;
+  /* Rounded to the whole minute so the 02:25 he reads is exactly the instant the
+     window opens; an unrounded third would disagree with its own label by up to
+     thirty seconds. */
+  var third = Math.round((T.fajr - P.maghrib) / 3 / 60000) * 60000;
+  return [
+    { id:'tahajjud', start:T.fajr - third, end:T.fajr, vol:true },
+    { id:'fajr',     start:T.fajr,    end:T.sunrise },
+    { id:'dhuhr',    start:T.dhuhr,   end:T.asr },
+    { id:'asr',      start:T.asr,     end:T.maghrib },
+    { id:'maghrib',  start:T.maghrib, end:T.isha },
+    { id:'isha',     start:T.isha,    end:N.fajr }
+  ];
+}
+
+/* Everything the screen needs, recomputed from the clock alone. Nothing here
+   remembers anything between calls, which is what makes it safe to throw away
+   and redo after iOS has frozen our timers for six hours in the background. */
+function stateAt(data, now){
+  var civil = civilOf(now);
+  var today = windowsFor(data, civil);
+  if (!today) return null;
+
+  /* Yesterday and tomorrow matter: at 00:30 the open window is yesterday's Isha,
+     and at 23:50 the next adhan is tomorrow's Fajr. */
+  var span = [], k, ws, i;
+  for (k = -1; k <= 1; k++){
+    ws = windowsFor(data, shiftCivil(civil, k));
+    if (ws) for (i = 0; i < ws.length; i++) span.push(ws[i]);
+  }
+
+  var current = null, tahajjud = null, next = null;
+  for (i = 0; i < span.length; i++){
+    var w = span[i];
+    if (now >= w.start && now < w.end){
+      if (w.vol) tahajjud = w; else current = w;   /* the two never collide: only Isha overlaps Tahajjud */
+    }
+    /* "Next adhan" is strictly in the future, so at the adhan instant itself the
+       countdown has already moved on to the following prayer instead of sitting
+       at 00:00:00. Tahajjud has no adhan and is never the answer. */
+    if (!w.vol && w.start > now && (!next || w.start < next.start)) next = w;
+  }
+
+  var T = dayTimes(data, civil);
+  var inGap = (now >= T.sunrise && now < T.dhuhr);
+
+  /* The rows are today's, start to finish - one anchor day, no mixing. The one
+     exception is Isha in the small hours: the window actually open then began
+     last night, so that row shows the instance he is standing in rather than
+     tonight's, and the card and the row agree to the minute. */
+  var rows = [], nextRow = null;
+  for (i = 0; i < today.length; i++){
+    var r = { id:today[i].id, start:today[i].start, end:today[i].end, vol:!!today[i].vol, state:'' };
+    if (current && current.id === r.id && (current.start !== r.start)){ r.start = current.start; r.end = current.end; }
+    if (tahajjud && r.vol && tahajjud.start !== r.start){ r.start = tahajjud.start; r.end = tahajjud.end; }
+    if (now >= r.start && now < r.end) r.state = 'on';
+    else if (now >= r.end) r.state = 'past';
+    else { if (!nextRow) nextRow = r; r.state = 'future'; }
+    rows.push(r);
+  }
+  if (nextRow) nextRow.state = 'next';
+
+  /* Once Isha has begun, nothing left in today's list is still to come; the two
+     quiet times for tomorrow morning stop the screen going blind at 23:50. */
+  var tmr = null;
+  if (next && next.start >= localMidnight(shiftCivil(civil, 1))){
+    var tw = windowsFor(data, shiftCivil(civil, 1));
+    if (tw) tmr = { tahajjud:tw[0].start, fajr:tw[1].start };
+  }
+
+  if (!next) return null;   /* cannot happen with three days loaded; cheaper than a crash */
+
+  return {
+    now:now, civil:civil, rows:rows, current:current, tahajjud:tahajjud,
+    next:next, gap:inGap, sunrise:T.sunrise, tomorrow:tmr,
+    dayStart:localMidnight(civil),
+    dayEnd:localMidnight(shiftCivil(civil, 1)),
+    /* The rail draws real clock time, so it wants today's windows exactly as the
+       day runs them - not the rows, whose Isha may have been swapped for last
+       night's instance. Yesterday's Isha is added because it owns the small
+       hours at the left end of the bar. */
+    dayWindows:today,
+    prevIsha:windowsFor(data, shiftCivil(civil, -1))[5]
+  };
+}
+
+/* 8100000 -> "2h 15m", 540000 -> "9 min", 45000 -> "45 sec". Rounded up, so it
+   never reads "0 min" while there is still time left. */
+function human(ms){
+  var s = Math.ceil(ms / 1000);
+  if (s < 60) return s + ' sec';
+  var m = Math.ceil(s / 60);
+  if (m < 60) return m + ' min';
+  var h = Math.floor(m / 60);
+  return h + 'h ' + pad2(m % 60) + 'm';
+}
+
+/* The countdown itself: h:mm:ss above an hour, m:ss below it. Never more than
+   ten hours separates two adhans at this latitude, so hours stay single-digit. */
+function clockdown(ms){
+  var s = Math.max(0, Math.ceil(ms / 1000));
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), q = s % 60;
+  return h > 0 ? (h + ':' + pad2(m) + ':' + pad2(q)) : (m + ':' + pad2(q));
+}
+
+function roDate(c){
+  return WEEKDAYS[weekdayOf(c)] + ', ' + c.d + ' ' + MONTHS[c.m - 1] + ' ' + c.y;
+}
+
+/* === core:end ============================================================ */
+
+/* ------------------------------------------------------------------ DOM ---- */
+var $ = function(id){ return document.getElementById(id); };
+var el = {
+  date:$('date'), clock:$('clock'), hero:$('hero'), nextName:$('nextName'),
+  count:$('count'), nextAt:$('nextAt'), card:$('card'), openLabel:$('openLabel'),
+  openName:$('openName'), remain:$('remain'), barFrom:$('barFrom'), barTo:$('barTo'),
+  fill:$('fill'), dot:$('dot'), tahNote:$('tahNote'), railWrap:$('railWrap'),
+  tahStrip:$('tahStrip'), segs:$('segs'), nowMark:$('nowMark'), ticks:$('ticks'),
+  list:$('list'), tomorrow:$('tomorrow'), msg:$('msg')
+};
+
+/* Writing to the DOM once a second is free only if we do not actually write.
+   Every setter is a no-op when the string has not changed. */
+function setText(node, s){ if (node.__v !== s){ node.__v = s; node.textContent = s; } }
+function setHTML(node, s){ if (node.__h !== s){ node.__h = s; node.innerHTML = s; } }
+function setClass(node, s){ if (node.__c !== s){ node.__c = s; node.className = s; } }
+function show(node, on){ if (node.__s !== on){ node.__s = on; node.classList.toggle('hide', !on); } }
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+/* ----------------------------------------------------------------- render -- */
+var DATA = null;
+
+function renderClockOnly(now){
+  /* Even with no schedule at all the screen still tells him the date, the place
+     and the Amsterdam time. A blank app is the one unacceptable failure. */
+  setText(el.date, roDate(civilOf(now)));
+  setText(el.clock, hhmmss(now));
+}
+
+function render(now){
+  renderClockOnly(now);
+
+  var st = DATA ? stateAt(DATA, now) : null;
+  var ok = !!st;
+  show(el.hero, ok); show(el.card, ok); show(el.railWrap, ok); show(el.list, ok);
+  show(el.msg, !ok);
+  if (!ok){
+    setHTML(el.msg, 'Orarul nu este încă disponibil.<br>Încerc din nou automat.');
+    show(el.tomorrow, false);
+    return;
+  }
+
+  /* --- hero: the one thing he opens the app for ------------------------- */
+  var n = NAMES[st.next.id];
+  setHTML(el.nextName, esc(n.ar) + ' <span>' + esc(n.tr) + '</span>');
+  setText(el.count, clockdown(st.next.start - now));
+  /* Late in the evening the next adhan is tomorrow's Fajr, while the Fajr row in
+     today's list is dimmed as past. Saying "mâine" is the whole difference
+     between that reading as considered and reading as a bug. */
+  setText(el.nextAt, st.tomorrow ? ('adhan mâine la ' + hhmm(st.next.start))
+                                 : ('adhan la ' + hhmm(st.next.start)));
+
+  /* --- the window open right now ---------------------------------------- */
+  var from, to, frac;
+  if (st.current){
+    var c = NAMES[st.current.id];
+    setClass(el.card, 'card');
+    /* Short enough not to wrap next to "mai sunt 1h 46m" on a 320px iPhone SE. */
+    setText(el.openLabel, 'Acum deschis');
+    setHTML(el.openName, esc(c.ar) + ' <span>&middot; ' + esc(c.tr) + '</span>');
+    setText(el.remain, 'mai sunt ' + human(st.current.end - now));
+    from = st.current.start; to = st.current.end;
+  } else {
+    /* Between sunrise and Dhuhr nothing is open, and saying so plainly is more
+       use to him than pretending Fajr is somehow still running. */
+    setClass(el.card, 'card gap');
+    setText(el.openLabel, 'Acum');
+    setHTML(el.openName, 'Nicio fereastră deschisă');
+    setText(el.remain, NAMES[st.next.id].ar + ' în ' + human(st.next.start - now));
+    from = st.gap ? st.sunrise : now; to = st.next.start;
+  }
+  frac = Math.min(1, Math.max(0, (now - from) / Math.max(1, to - from)));
+  setText(el.barFrom, hhmm(from));
+  setText(el.barTo, hhmm(to));
+  var pct = (frac * 100).toFixed(2) + '%';
+  if (el.fill.__w !== pct){ el.fill.__w = pct; el.fill.style.width = pct; el.dot.style.left = pct; }
+
+  /* Tahajjud open at the same time as Isha is worth one quiet line, not a
+     second headline - it is voluntary. */
+  var tahOn = !!st.tahajjud;
+  show(el.tahNote, tahOn);
+  if (tahOn){
+    setHTML(el.tahNote, 'Tahajjud e deschis &middot; până la ' +
+      '<b class="num">' + hhmm(st.tahajjud.end) + '</b>');
+  }
+
+  renderRail(st, now);
+  renderList(st);
+
+  show(el.tomorrow, !!st.tomorrow);
+  if (st.tomorrow){
+    setHTML(el.tomorrow,
+      '<span>Mâine &middot; Tahajjud <b class="num">' + hhmm(st.tomorrow.tahajjud) + '</b></span>' +
+      '<span>Fajr <b class="num">' + hhmm(st.tomorrow.fajr) + '</b></span>');
+  }
+}
+
+/* The day as one bar, midnight to midnight in Amsterdam. Health's sleep stages,
+   not a progress bar: each window is a segment, the empty stretch between
+   sunrise and Dhuhr is genuinely empty, and the hairline is now. */
+var RAIL_ALPHA = { fajr:.30, dhuhr:.38, asr:.46, maghrib:.54, isha:.62 };
+
+function renderRail(st, now){
+  var span = st.dayEnd - st.dayStart;             /* 23, 24 or 25 hours */
+  var pos = function(t){ return Math.min(100, Math.max(0, (t - st.dayStart) / span * 100)); };
+
+  var segs = [], i, w;
+  var all = [st.prevIsha].concat(st.dayWindows);
+  for (i = 0; i < all.length; i++){
+    w = all[i];
+    if (w.vol) continue;                           /* drawn as its own dotted strip */
+    if (w.end <= st.dayStart || w.start >= st.dayEnd) continue;
+    var a = pos(w.start), b = pos(w.end);
+    if (b - a <= 0) continue;
+    var live = (now >= w.start && now < w.end);
+    segs.push('<div class="seg' + (live ? ' on' : '') + '" style="left:' + a.toFixed(3) +
+      '%;width:' + Math.max(0.4, b - a - 0.35).toFixed(3) + '%;opacity:' +
+      (live ? 1 : (RAIL_ALPHA[w.id] || .4)) + '"></div>');
+  }
+  /* The segments only change when a window opens or closes, so this innerHTML is
+     a no-op on almost every tick; the hairline that does move every second is a
+     separate, permanent node that only gets a style write. */
+  setHTML(el.segs, segs.join(''));
+  var np = pos(now).toFixed(3) + '%';
+  if (el.nowMark.__l !== np){ el.nowMark.__l = np; el.nowMark.style.left = np; }
+
+  var t = null;
+  for (i = 0; i < st.dayWindows.length; i++) if (st.dayWindows[i].vol) t = st.dayWindows[i];
+  if (t && t.end > st.dayStart && t.start < st.dayEnd){
+    var ta = pos(t.start), tb = pos(t.end);
+    setHTML(el.tahStrip, '<i style="left:' + ta.toFixed(3) + '%;width:' + (tb - ta).toFixed(3) + '%"></i>');
+  } else setHTML(el.tahStrip, '');
+
+  /* Ticks are computed, not assumed to be every 4.1666% - on a switch day the
+     hours are not evenly spaced across the bar and the marks must still line up.
+     They only change at midnight, so they are built once per day rather than
+     once per second. */
+  if (el.ticks.__day !== st.dayStart){
+    el.ticks.__day = st.dayStart;
+    var out = [], h;
+    for (h = 0; h <= 24; h += 3){
+      var p = pos(localHour(st.dayStart, h));
+      out.push('<i style="left:' + p.toFixed(3) + '%"></i>');
+      if (h % 6 === 0) out.push('<b style="left:' + p.toFixed(3) + '%">' + pad2(h === 24 ? 24 : h) + '</b>');
+    }
+    setHTML(el.ticks, out.join(''));
+  }
+}
+
+function renderList(st){
+  var html = [], i;
+  for (i = 0; i < st.rows.length; i++){
+    var r = st.rows[i], nm = NAMES[r.id];
+    var cls = 'row ' + r.state + (r.vol ? ' vol' : '') + (i === 0 ? ' first' : '');
+    html.push(
+      '<li class="' + cls + '">' +
+        (r.vol ? '<span class="rule"></span>' : '') +
+        '<span class="dot"></span>' +
+        '<span class="r-name">' +
+          '<span class="r-ar">' + esc(nm.ar) + '</span>' +
+          '<span class="r-tr">' + esc(nm.tr) + '</span>' +
+          (r.vol ? '<span class="tag">voluntar</span>' : '') +
+        '</span>' +
+        '<span class="r-int num">' + hhmm(r.start) + ' → ' + hhmm(r.end) + '</span>' +
+      '</li>');
+
+    /* Sunrise closes Fajr and opens nothing: a hairline between the rows, never
+       a row of its own. */
+    if (r.id === 'fajr'){
+      html.push('<li class="sun"><span class="mk">&#9679;</span>' +
+        '<span>Răsărit <span class="num">' + hhmm(st.sunrise) + '</span></span>' +
+        '<span class="sp"></span><span>nicio fereastră deschisă</span></li>');
+    }
+  }
+  setHTML(el.list, html.join(''));
+}
+
+/* ------------------------------------------------------------------ data --- */
+var LS_KEY = 'elfeth.times.v1';
+
+function loadCached(){
+  try {
+    var s = localStorage.getItem(LS_KEY);
+    return s ? JSON.parse(s) : null;
+  } catch (e){ return null; }   /* private mode, evicted storage, corrupt JSON */
+}
+function saveCached(d){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch (e){}
+}
+
+/* A schedule is only allowed to replace the one on screen if it is actually a
+   schedule. A captive portal answering 200 with a login page parses as nothing,
+   but a truncated file could parse as an object with no days in it. */
+function usable(d){
+  return !!(d && d.days && typeof d.days === 'object' && d.days['01-01'] && d.days['06-15']);
+}
+
+var fetching = false, lastTry = 0;
+
+function refreshTimes(){
+  if (fetching) return;
+  fetching = true;
+  /* Our own leash. The service worker has a 3s one, but on a first visit - or
+     after iOS has evicted the worker, which it does to apps it decides are idle
+     - nothing else stands between him and a spinner that never ends. */
+  var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+  var killed = false;
+  var timer = setTimeout(function(){ killed = true; if (ctrl) ctrl.abort(); }, 7000);
+
+  fetch('./times.json', {
+    cache:'no-store',
+    credentials:'same-origin',
+    signal: ctrl ? ctrl.signal : undefined
+  }).then(function(r){
+    if (!r.ok) throw new Error('http ' + r.status);
+    return r.json();
+  }).then(function(d){
+    if (killed || !usable(d)) return;
+    DATA = d; saveCached(d); tick();
+  })['catch'](function(){
+    /* Offline, hung, or a wifi portal. The cached schedule is at worst a day
+       stale and is always better than an empty screen, so: say nothing. */
+  }).then(function(){ clearTimeout(timer); fetching = false; });
+}
+
+/* ------------------------------------------------------- service worker ---- */
+var swReg = null;
+
+function setupSW(){
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol !== 'https:') return;   /* file:// and http:// would throw */
+
+  /* Only reload for a worker that REPLACED one. On a first visit the very first
+     worker also fires controllerchange, and reloading then would be a pointless
+     flash on the screen. */
+  var hadController = !!navigator.serviceWorker.controller;
+  var reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if (!hadController || reloading) return;
+    reloading = true;
+    location.reload();   /* nothing here is playing or unsaved, so this is safe */
+  });
+
+  navigator.serviceWorker.register('./sw.js').then(function(reg){
+    swReg = reg;
+  })['catch'](function(){ /* no worker: the app still works, just without offline */ });
+}
+
+function checkForUpdate(){
+  if (swReg && swReg.update) { try { swReg.update(); } catch (e){} }
+}
+
+/* --------------------------------------------------------------- the beat -- */
+var timer = 0;
+
+function tick(){
+  render(Date.now());
+  /* Re-aimed at the next whole second every time instead of setInterval, which
+     drifts and, after iOS unfreezes a backgrounded tab, fires a burst of
+     catch-up callbacks. */
+  clearTimeout(timer);
+  timer = setTimeout(tick, 1000 - (Date.now() % 1000) + 8);
+}
+
+function refreshAll(force){
+  var t = Date.now();
+  if (!force && t - lastTry < 60000) return;   /* app switching flaps visibility */
+  lastTry = t;
+  refreshTimes();
+  checkForUpdate();
+}
+
+/* First paint comes from localStorage, synchronously, before any network call -
+   so the app is never blank, even on a dead connection. */
+DATA = loadCached();
+if (!usable(DATA)) DATA = null;
+tick();
+
+setupSW();
+refreshAll(true);
+
+document.addEventListener('visibilitychange', function(){
+  if (document.visibilityState !== 'visible') return;
+  /* iOS throttles or freezes timers in the background: everything is recomputed
+     from the clock here rather than trusting whatever the counters think. */
+  tick();
+  refreshAll(false);
+});
+window.addEventListener('pageshow', function(){ tick(); });      /* back-forward cache */
+window.addEventListener('focus', function(){ tick(); });
+window.addEventListener('online', function(){ refreshAll(true); });
+setInterval(function(){ refreshAll(true); }, 900000);            /* 15 minutes */
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+# The app has no build step and no dependencies - the data scripts use only the
+# Node standard library. node_modules/ is listed for the day someone reaches for
+# a package anyway; nothing here should ever need one.
+node_modules/
+package-lock.json
+
+# OS droppings
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor cruft
+.vscode/
+.idea/
+*.swp
+*~
+
+# NOT ignored, on purpose: data/*-raw.json
+#
+# elfeth-2026-raw.json and mawaqit-2026-raw.json are the audit trail. They are
+# exactly what the mosque's feed and Mawaqit returned on the day times.json was
+# generated, so a disputed minute can always be traced back to its source -
+# including after the websites themselves have changed or gone away. The
+# refresh workflow commits the updated snapshot together with the times it
+# produced, for the same reason. Do not add them here to "clean up".
