@@ -171,7 +171,6 @@ data/
 tools/
   embed-seed.js     re-embeds times.json into index.html
   make-icons.js     regenerates the icons, no dependencies
-docs/design-candidates/   three design candidates this app was chosen from
 .github/workflows/
   refresh-times.yml nightly scrape -> rebuild -> commit, only if changed
   pages.yml         deploy to GitHub Pages
