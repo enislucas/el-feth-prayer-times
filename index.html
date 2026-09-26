@@ -204,14 +204,23 @@ body{
 
 .row.past .r-name{ color:var(--text-3); font-weight:500; }
 .row.past .r-int{ color:var(--text-4); }
-.row.on .r-int{ color:var(--accent); font-weight:500; }
+.row.on .r-name{ color:#fff; }
+.row.on .r-int{ color:var(--accent); font-weight:600; }
+/* The open window is the one row that gets a surface: a soft filled pill with
+   an accent hairline, the way iOS marks the selected cell of an inset list.
+   It reaches 12px past the text on both sides so the text itself stays aligned
+   with every other row - the pill moves, the words do not. The hairline
+   separators above and below it are dropped, or they would cut into it. */
 .row.on{
-  /* the open window gets light, not a box */
-  background:linear-gradient(90deg, var(--accent-14) 0%, rgba(138,174,255,0) 58%);
-  box-shadow:inset 2px 0 0 var(--accent);
-  border-radius:0 12px 12px 0;
-  margin-left:-12px; padding-left:12px; width:calc(100% + 12px);
+  background:rgba(138,174,255,.13);
+  border-radius:14px;
+  box-shadow:inset 0 0 0 1px rgba(138,174,255,.32), 0 10px 28px rgba(138,174,255,.10);
+  margin-left:-12px; margin-right:-12px;
+  padding-left:12px; padding-right:12px;
+  width:calc(100% + 24px);
+  border-top-color:transparent;
 }
+.row.on:not(.vol) + .row{ border-top-color:transparent; }
 .row.next .r-name, .row.next .r-int{ color:var(--text); }
 
 /* Tahajjud is voluntary and overlaps Isha, so it must never be mistaken for one
@@ -223,7 +232,13 @@ body{
   position:absolute; left:3px; top:9px; bottom:9px; width:0;
   border-left:1px dashed var(--accent-30);
 }
-.row.vol.on{ background:none; box-shadow:none; margin-left:0; padding-left:14px; width:auto; }
+/* Tahajjud open at the same time as Isha must not compete with it for the
+   pill: it keeps its dashed rule, gains a lit dot and an accent time, no more. */
+.row.vol.on{
+  background:none; box-shadow:none; border-radius:0;
+  margin-left:0; margin-right:0; padding-left:14px; padding-right:2px; width:auto;
+  border-top-color:var(--line);
+}
 .row.vol.on .r-name{ color:var(--text); }
 .row.vol.on .rule{ border-left:1px dashed var(--accent); }
 .row.vol.on .r-int{ color:rgba(138,174,255,.56); }
