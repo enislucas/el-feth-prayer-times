@@ -124,16 +124,25 @@ body{
   margin-top:10px; font-size:clamp(21px,6vw,26px); font-weight:600;
   letter-spacing:-.01em; color:var(--text);
 }
-.count{
-  margin-top:2px;
-  font-size:clamp(50px, 16vw, 84px);
+/* Two halves under the prayer's name: the time left on the left, the adhan's own time on the
+   right, a hairline between them. Each is half the size the countdown used to be alone, so the
+   two together take less height than the one did. */
+.split{
+  display:grid; grid-template-columns:1fr 1px 1fr; align-items:center;
+  margin-top:12px;
+}
+.split .rule{ align-self:stretch; width:1px; margin:6px 0; background:rgba(255,255,255,.12); }
+.split .cell{ min-width:0; text-align:center; }
+.big{
+  font-size:clamp(30px, 10vw, 46px);
   line-height:1.05;
   font-weight:300;                 /* SF Pro Light: the iOS Weather temperature look */
-  letter-spacing:-.035em;
+  letter-spacing:-.03em;
   color:var(--text);
-  text-shadow:0 0 44px rgba(138,174,255,.18);   /* glass catching light, not neon */
+  white-space:nowrap;
+  text-shadow:0 0 36px rgba(138,174,255,.18);   /* glass catching light, not neon */
 }
-.at{ margin-top:7px; font-size:14px; color:var(--text-2); }
+.cap{ margin-top:5px; font-size:13px; color:var(--text-3); }
 
 /* ------------------------------------------------- the window open right now */
 .card{
@@ -266,8 +275,8 @@ body{
    not a redesign - the same information in the same order. */
 @media (max-height:700px){
   .hero{ padding:10px 0 12px; }
-  .count{ font-size:clamp(40px, 12.5vw, 58px); }
-  .at{ margin-top:5px; font-size:13px; }
+  .big{ font-size:clamp(28px, 9vw, 40px); }
+  .split{ margin-top:8px; }
   .card{ padding:11px 13px 12px; }
   .list{ margin-top:10px; }
   .row{ padding-top:7px; padding-bottom:7px; }
@@ -282,8 +291,11 @@ body{
   <section class="hero">
     <div class="eyebrow">Next</div>
     <div class="next-name" id="nextName">&nbsp;</div>
-    <div class="count num" id="count">&nbsp;</div>
-    <div class="at num" id="nextAt">&nbsp;</div>
+    <div class="split">
+      <div class="cell"><div class="big num" id="count">&nbsp;</div><div class="cap">remaining</div></div>
+      <div class="rule"></div>
+      <div class="cell"><div class="big num" id="nextAt">&nbsp;</div><div class="cap" id="nextCap">adhan</div></div>
+    </div>
   </section>
 
   <section class="card" id="card">
@@ -520,7 +532,7 @@ function clockdown(ms){
 /* ------------------------------------------------------------------ DOM ---- */
 var $ = function(id){ return document.getElementById(id); };
 var el = {
-  nextName:$('nextName'), count:$('count'), nextAt:$('nextAt'),
+  nextName:$('nextName'), count:$('count'), nextAt:$('nextAt'), nextCap:$('nextCap'),
   card:$('card'), openLabel:$('openLabel'), openName:$('openName'), remain:$('remain'),
   barFrom:$('barFrom'), barTo:$('barTo'), fill:$('fill'), dot:$('dot'),
   list:$('list'), msg:$('msg')
@@ -549,10 +561,11 @@ function render(now){
   /* --- the one thing he opens the app for ------------------------------- */
   setText(el.nextName, NAMES[st.next.id]);
   setText(el.count, clockdown(st.next.start - now));
+  setText(el.nextAt, hhmm(st.next.start));
   /* Late in the evening the next adhan is tomorrow's Fajr while the Fajr row in
      the list is dimmed as past. Saying "tomorrow" is the whole difference
      between that reading as considered and reading as a bug. */
-  setText(el.nextAt, (st.tomorrow ? 'tomorrow at ' : 'at ') + hhmm(st.next.start));
+  setText(el.nextCap, st.tomorrow ? 'adhan tomorrow' : 'adhan');
 
   /* --- the window open right now ---------------------------------------- */
   var from, to;
