@@ -10,7 +10,8 @@ It shows, in this order:
 - **the time left until the next adhan**, live to the second, and when it is;
 - **the window that is open right now** as an interval, with how far through it
   you are and how long is left;
-- **every window of the day as an interval**, Tahajjud first, then the five.
+- **every window of the day ahead as an interval**, Tahajjud first, then the
+  five. From the Isha adhan on, that is already **tomorrow**.
 
 That is all. No location line, no date, no clock (the phone has one), no
 buttons, no settings, no install banner. It is a display.
@@ -40,9 +41,12 @@ Deliberate choices, not oversights:
   Fajr row's interval already ends at it, to the minute.
 - Between sunrise and Dhuhr **nothing is open**, and the app says so rather than
   pretending Fajr is still running.
-- In the small hours the Isha row shows **last night's** instance — the one you
-  are actually standing in — marked *last night* so it cannot be misread
-  against the Maghrib row above it.
+- **After Isha the list turns over to the next day**, so in the evening it
+  matches the row for tomorrow on the mosque's website and paper, which is
+  the day you are heading into. Tonight's Isha is still on screen: it is the
+  open window, and the card above the list shows it with its own start and
+  end. The list's Isha row is tomorrow's and is not highlighted, so the two
+  cannot be confused.
 
 ## Where the times come from
 

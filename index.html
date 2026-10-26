@@ -252,14 +252,6 @@ body{
 .row.vol.on .rule{ border-left:1px dashed var(--accent); }
 .row.vol.on .r-int{ color:rgba(138,174,255,.56); }
 
-/* In the small hours the Isha row shows LAST NIGHT'S window - the one actually
-   open - so it has to say so, or it reads as contradicting the Maghrib row
-   above it, every night of the year. */
-.eve{
-  margin-left:8px; font-size:11px; font-weight:500; color:var(--text-4);
-  letter-spacing:.02em;
-}
-
 .hide{ display:none !important; }
 .msg{ padding:48px 0; text-align:center; color:var(--text-2); font-size:14px; line-height:1.65; }
 
@@ -469,16 +461,17 @@ function stateAt(data, now){
   var T = dayTimes(data, civil);
   var inGap = (now >= T.sunrise && now < T.dhuhr);
 
+  /* The list is the day he is heading into. From the Isha adhan on, every
+     prayer of today is behind him, so it already shows TOMORROW - the same
+     day the mosque's website and paper show for that Fajr. Tonight's Isha is
+     not lost: it is the open window, and the card above shows it with its own
+     start and end. After midnight the civil date catches up and nothing moves. */
+  var shown = (now >= T.isha) ? windowsFor(data, shiftCivil(civil, 1)) : today;
+  if (!shown) return null;
+
   var rows = [], nextRow = null;
-  for (i = 0; i < today.length; i++){
-    var r = { id:today[i].id, start:today[i].start, end:today[i].end, vol:!!today[i].vol, state:'' };
-    /* In the small hours the window actually open is LAST NIGHT'S Isha, not the
-       one that opens this evening. Showing the instance he is standing in keeps
-       the row and the card agreeing to the minute - but it has to say so, or
-       the row silently contradicts the Maghrib row above it. */
-    if (current && current.id === r.id && (current.start !== r.start)){
-      r.start = current.start; r.end = current.end; r.carried = true;
-    }
+  for (i = 0; i < shown.length; i++){
+    var r = { id:shown[i].id, start:shown[i].start, end:shown[i].end, vol:!!shown[i].vol, state:'' };
     if (now >= r.start && now < r.end) r.state = 'on';
     else if (now >= r.end) r.state = 'past';
     else {
@@ -604,9 +597,7 @@ function renderList(st){
       '<li class="row ' + r.state + (r.vol ? ' vol' : '') + (i === 0 ? ' first' : '') + '">' +
         (r.vol ? '<span class="rule"></span>' : '') +
         '<span class="dot"></span>' +
-        '<span class="r-name">' + NAMES[r.id] +
-          (r.carried ? '<span class="eve">last night</span>' : '') +
-        '</span>' +
+        '<span class="r-name">' + NAMES[r.id] + '</span>' +
         '<span class="r-int num">' + hhmm(r.start) + ' → ' + hhmm(r.end) + '</span>' +
       '</li>');
   }
