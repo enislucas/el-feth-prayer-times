@@ -143,6 +143,10 @@ body{
   text-shadow:0 0 36px rgba(138,174,255,.18);   /* glass catching light, not neon */
 }
 .cap{ margin-top:5px; font-size:13px; color:var(--text-3); }
+/* During Fajr the hero counts down to Ishraq; the next adhan is still worth
+   knowing, so it sits underneath as a quiet note rather than the headline. */
+.note{ margin-top:12px; font-size:12.5px; color:var(--text-3); letter-spacing:.01em; }
+.note b{ font-weight:600; color:var(--text-2); }
 
 /* ------------------------------------------------- the window open right now */
 .card{
@@ -293,6 +297,7 @@ body{
       <div class="rule"></div>
       <div class="cell"><div class="big num" id="nextAt">&nbsp;</div><div class="cap" id="nextCap">adhan</div></div>
     </div>
+    <div class="note num hide" id="note"></div>
   </section>
 
   <section class="card" id="card">
@@ -530,7 +535,7 @@ function clockdown(ms){
 /* ------------------------------------------------------------------ DOM ---- */
 var $ = function(id){ return document.getElementById(id); };
 var el = {
-  nextName:$('nextName'), count:$('count'), nextAt:$('nextAt'), nextCap:$('nextCap'),
+  nextName:$('nextName'), count:$('count'), nextAt:$('nextAt'), nextCap:$('nextCap'), note:$('note'),
   card:$('card'), openLabel:$('openLabel'), openName:$('openName'), remain:$('remain'),
   barFrom:$('barFrom'), barTo:$('barTo'), fill:$('fill'), dot:$('dot'),
   list:$('list'), msg:$('msg')
@@ -557,13 +562,19 @@ function render(now){
   }
 
   /* --- the one thing he opens the app for ------------------------------- */
-  setText(el.nextName, NAMES[st.next.id]);
-  setText(el.count, clockdown(st.next.start - now));
-  setText(el.nextAt, hhmm(st.next.start));
+  /* While Fajr is open the deadline that matters is sunrise - Ishraq - so that is
+     what the hero counts down to. Dhuhr, the next adhan, becomes a note. */
+  var fajrOpen = !!(st.current && st.current.id === 'fajr');
+  var target = fajrOpen ? st.current.end : st.next.start;
+  setText(el.nextName, fajrOpen ? 'Ishraq' : NAMES[st.next.id]);
+  setText(el.count, clockdown(target - now));
+  setText(el.nextAt, hhmm(target));
+  show(el.note, fajrOpen);
+  setHTML(el.note, fajrOpen ? 'then <b>' + NAMES[st.next.id] + '</b> adhan ' + hhmm(st.next.start) : '');
   /* Late in the evening the next adhan is tomorrow's Fajr while the Fajr row in
      the list is dimmed as past. Saying "tomorrow" is the whole difference
      between that reading as considered and reading as a bug. */
-  setText(el.nextCap, st.tomorrow ? 'adhan tomorrow' : 'adhan');
+  setText(el.nextCap, fajrOpen ? 'sunrise' : (st.tomorrow ? 'adhan tomorrow' : 'adhan'));
 
   /* --- the window open right now ---------------------------------------- */
   var from, to;

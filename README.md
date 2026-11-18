@@ -7,7 +7,9 @@ date without anyone touching it.
 
 It shows, in this order:
 
-- **the time left until the next adhan**, live to the second, and when it is;
+- **the time left until the next adhan**, live to the second, and when it is.
+  While Fajr is open it counts down to **Ishraq** instead (sunrise, where Fajr
+  ends), with the Dhuhr adhan as a small note underneath;
 - **the window that is open right now** as an interval, with how far through it
   you are and how long is left;
 - **every window of the day ahead as an interval**, Tahajjud first, then the
