@@ -185,6 +185,11 @@ body{
 }
 .card.gap .head-dot{ background:var(--accent); box-shadow:0 0 12px 1px rgba(138,174,255,.45); }
 .card.gap .open-name{ color:var(--text-2); font-weight:500; }
+/* Sunrise to Dhuhr: the Fajr window that has closed. Same geometry, all of it
+   dimmed - a full bar with no glow reads as finished, never as running. */
+.card.done .open-name{ color:var(--text-2); font-weight:500; }
+.card.done .fill{ background:rgba(138,174,255,.30); }
+.card.done .head-dot{ background:rgba(238,243,252,.45); box-shadow:none; }
 
 /* ------------------------------------------------------------------ list -- */
 .list{
@@ -490,7 +495,7 @@ function stateAt(data, now){
 
   return {
     now:now, civil:civil, rows:rows, current:current, tahajjud:tahajjud,
-    next:next, gap:inGap, sunrise:T.sunrise,
+    next:next, gap:inGap, fajr:T.fajr, sunrise:T.sunrise,
     tomorrow:(next.start >= localMidnight(shiftCivil(civil, 1)))
   };
 }
@@ -568,9 +573,21 @@ function render(now){
     setText(el.openName, NAMES[st.current.id]);
     setText(el.remain, human(st.current.end - now) + ' left');
     from = st.current.start; to = st.current.end;
+  } else if (st.gap){
+    /* Between sunrise and Dhuhr nothing is open. The card keeps the Fajr window
+       exactly as it ran - fajr to sunrise, bar full, marked ended - so the
+       morning never reads as one window stretching from Fajr to Dhuhr. It says
+       "Ended" instead of "Now": pretending Fajr is still running would be the
+       one dangerous thing this card could do. The hero above already counts
+       down to Dhuhr. */
+    setClass(el.card, 'card done');
+    setText(el.openLabel, 'Ended');
+    setText(el.openName, NAMES.fajr);
+    setText(el.remain, 'at sunrise');
+    from = st.fajr; to = st.sunrise;
   } else {
-    /* Between sunrise and Dhuhr nothing is open, and saying so plainly is more
-       use to him than pretending Fajr is somehow still running. */
+    /* Unreachable with full data (some window is always open outside the
+       sunrise gap); kept so a hole in the data degrades to a plain message. */
     setClass(el.card, 'card gap');
     setText(el.openLabel, 'Now');
     setText(el.openName, 'No window open');
@@ -578,7 +595,7 @@ function render(now){
        exact prayer, and the bar below already ends at its time - a third copy
        of the same fact is noise. */
     setText(el.remain, '');
-    from = st.gap ? st.sunrise : now; to = st.next.start;
+    from = now; to = st.next.start;
   }
   var frac = Math.min(1, Math.max(0, (now - from) / Math.max(1, to - from)));
   setText(el.barFrom, hhmm(from));

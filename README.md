@@ -39,8 +39,10 @@ Deliberate choices, not oversights:
   what the mosque publishes.
 - **Sunrise** is a boundary, never a prayer row, and is not shown as one: the
   Fajr row's interval already ends at it, to the minute.
-- Between sunrise and Dhuhr **nothing is open**, and the app says so rather than
-  pretending Fajr is still running.
+- Between sunrise and Dhuhr **nothing is open**. The card keeps showing the Fajr
+  window as it ran, fajr → sunrise, marked **Ended · at sunrise**, while the
+  countdown above already points at Dhuhr. That way the morning never reads as
+  one Fajr → Dhuhr window, and Fajr never looks like it is still running.
 - **After Isha the list turns over to the next day**, so in the evening it
   matches the row for tomorrow on the mosque's website and paper, which is
   the day you are heading into. Tonight's Isha is still on screen: it is the
